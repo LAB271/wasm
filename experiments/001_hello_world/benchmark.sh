@@ -23,16 +23,19 @@ if [ -z "${CONTAINER_CMD:-}" ]; then
   fi
 fi
 
+# ── Helper: milliseconds since epoch (macOS-safe) ────────────────────────────
+now_ms() { python3 -c "import time; print(int(time.time()*1000))"; }
+
 # ── Helper: cold-start measurement ──────────────────────────────────────────
 cold_start_ms() {
   local port=$1
   local start end
-  start=$(date +%s%3N)
+  start=$(now_ms)
   for i in $(seq 1 100); do
     curl -sf "http://127.0.0.1:$port/" &>/dev/null && break
     sleep 0.1
   done
-  end=$(date +%s%3N)
+  end=$(now_ms)
   echo $(( end - start ))
 }
 
