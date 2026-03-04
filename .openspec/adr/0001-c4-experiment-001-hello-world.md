@@ -16,7 +16,8 @@ and reduced memory footprint.
 | Experiment README | `experiments/001_hello_world/README.md` | Hypotheses, methodology, and results table |
 | Benchmark harness | `experiments/001_hello_world/benchmark.sh` | Orchestrates all three legs, emits markdown table |
 | Leg 1 — Flask/Podman | `experiments/001_hello_world/leg1_flask_docker/` | Python Flask app in a container (Podman preferred, Docker fallback) on port 5001 |
-| Leg 2 — Pyodide/Chromium | `experiments/001_hello_world/leg2_pyodide_chromium/` | Puppeteer headless Chrome + Pyodide WASM runtime, Node HTTP proxy on port 5002 |
+| Leg 2a — Pyodide/Node | `experiments/001_hello_world/leg2a_pyodide_node/` | Pyodide WASM runtime in Node.js (no browser), Node HTTP server on port 5002 |
+| Leg 2b — Pyodide/Chromium | `experiments/001_hello_world/leg2b_pyodide_chromium/` | Puppeteer headless Chrome + Pyodide loaded inside browser, Node HTTP proxy on port 5008 |
 | Leg 3 — Wasmtime | `experiments/001_hello_world/leg3_wasmtime/` | Rust compiled to `wasm32-wasip2`, served via `wasmtime serve` on port 5003 |
 
 ## Constraints

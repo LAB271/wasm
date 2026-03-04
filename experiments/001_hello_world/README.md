@@ -26,6 +26,8 @@ def handle(request):
 | H2 | **Cold start**: Podman slowest (~500ms+); Wasmtime fastest (<50ms); Pyodide/Chromium in between (~2–5s due to Chromium launch + Pyodide WASM init) | — |
 | H3 | **Memory**: Chromium process heaviest (300MB+); Flask/Podman moderate (~50MB); Wasmtime lightest (<10MB) | — |
 | H4 | **Warm p50**: All three comparable once runtime is loaded; Wasmtime expected fastest raw handler | — |
+| H8 | **Pyodide-in-Chrome vs Node**: Higher cold start and memory than Pyodide-in-Node due to browser overhead | — |
+| H9 | **Warm latency comparable**: Chrome's V8 and Node's V8 run WASM at similar speed; `page.evaluate()` IPC adds overhead | — |
 | H5 | **Bridge overhead vs direct**: Negligible — dominated by actual query execution time | — |
 | H6 | **Connection pool location**: Host-side pool is equivalent to in-process pool | — |
 | H7 | **Double-hop latency**: WASM→sidecar→Postgres adds measurable but acceptable overhead vs single-hop | — |
@@ -39,7 +41,7 @@ def handle(request):
 - **Warm benchmark**: `hey -n 1000 -c 1` (1000 sequential requests, single connection) — identical for all legs
 - **Cold start**: wall-clock time from process launch to first successful `curl /` response
 - **Memory RSS**: `ps -o rss= -p $PID` captured after the warm benchmark completes
-- **Artifact size**: container image bytes (Leg 1), `node_modules` directory (Leg 2), `.wasm` binary (Leg 3)
+- **Artifact size**: container image bytes (Leg 1), `node_modules` directory (Legs 2a/2b), `.wasm` binary (Leg 3)
 - **Note on legs 4a/4b**: Leg 4a uses Flask's single-threaded dev server while Leg 4b uses Node.js's async event loop. With `-c 1` (single concurrency) this is a fair comparison, but results would diverge under concurrent load
 
 ---
@@ -50,14 +52,14 @@ def handle(request):
 
 ### Hello World (legs 1–3)
 
-| Metric | Leg 1 Flask/Podman | Leg 2 Pyodide/Chrome | Leg 3 Wasmtime |
-|---|---|---|---|
-| Artifact size | | | |
-| Cold start (ms) | | | |
-| Memory RSS (MB) | | | |
-| hey p50 (ms) | | | |
-| hey p99 (ms) | | | |
-| hey req/s | | | |
+| Metric | Leg 1 Flask/Podman | Leg 2a Pyodide/Node | Leg 2b Pyodide/Chrome | Leg 3 Wasmtime |
+|---|---|---|---|---|
+| Artifact size | | | | |
+| Cold start (ms) | | | | |
+| Memory RSS (MB) | | | | |
+| hey p50 (ms) | | | | |
+| hey p99 (ms) | | | | |
+| hey req/s | | | | |
 
 ### Postgres DB query (legs 4a/4b/4c)
 
@@ -77,7 +79,8 @@ def handle(request):
 | Leg | Runtime | Port | Entry |
 |-----|---------|------|-------|
 | 1 | Flask in Podman/Docker container | 5001 | `leg1_flask_docker/run.sh` |
-| 2 | Python via Pyodide in headless Chromium (Node.js) | 5002 | `leg2_pyodide_chromium/run.sh` |
+| 2a | Python via Pyodide in Node.js (no browser) | 5002 | `leg2a_pyodide_node/run.sh` |
+| 2b | Python via Pyodide in headless Chromium (Puppeteer) | 5008 | `leg2b_pyodide_chromium/run.sh` |
 | 3 | Rust compiled to `wasm32-wasip2`, served via `wasmtime serve` | 5003 | `leg3_wasmtime/run.sh` |
 | 4a | Flask + psycopg2 → Postgres (direct connection) | 5004 | `leg4a_flask_postgres/run.sh` |
 | 4b | Pyodide + Node.js pg bridge → Postgres (host bridge) | 5005 | `leg4b_wasm_postgres_bridge/run.sh` |

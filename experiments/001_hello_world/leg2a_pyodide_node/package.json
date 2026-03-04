@@ -1,13 +1,12 @@
 {
-  "name": "leg2-pyodide-chromium",
+  "name": "leg2a-pyodide-node",
   "version": "1.0.0",
-  "description": "Hello World via Pyodide running in headless Chromium",
+  "description": "Hello World via Pyodide running directly in Node.js (no browser)",
   "main": "harness.js",
   "scripts": {
     "start": "node harness.js"
   },
   "dependencies": {
-    "puppeteer": "^22.0.0",
     "pyodide": "^0.26.0"
   }
 }
