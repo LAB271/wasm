@@ -1,6 +1,7 @@
 ./.claude
 
 # Experiment build artifacts
+package-lock.json
 node_modules/
 experiments/**/node_modules/
 experiments/**/target/

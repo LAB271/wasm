@@ -15,6 +15,17 @@ fail() { echo -e "  ${RED}✗${NC} $1" >&2; exit 1; }
 
 command -v hey &>/dev/null || fail "hey not found — brew install hey"
 
+# ── Cleanup trap ──────────────────────────────────────────────────────────────
+PIDS_TO_KILL=()
+cleanup() {
+  for pid in "${PIDS_TO_KILL[@]}"; do
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  done
+  ${CONTAINER_CMD:-podman} rm -f bench-postgres leg1-flask 2>/dev/null || true
+}
+trap cleanup EXIT
+
 # ── Detect container runtime ────────────────────────────────────────────────
 if [ -z "${CONTAINER_CMD:-}" ]; then
   if command -v podman &>/dev/null && podman info &>/dev/null 2>&1; then
@@ -45,7 +56,7 @@ cold_start_ms() {
 # ── Helper: RSS in MB ────────────────────────────────────────────────────────
 rss_mb() {
   local pid=$1
-  ps -o rss= -p "$pid" 2>/dev/null | awk '{printf "%.0f", $1/1024}' || echo "0"
+  ps -o rss= -p "$pid" 2>/dev/null | awk '{printf "%.0f", $1/1024}' || echo "?"
 }
 
 # ── Helper: parse hey output ─────────────────────────────────────────────────
@@ -84,12 +95,13 @@ ok "hey done  rss: ${RSS_1}MB  p50: $(hey_stat "$HEY_1" p50)ms  rps: $(hey_stat 
 
 # ── LEG 2: Pyodide / Chromium ────────────────────────────────────────────────
 info "Leg 2: Pyodide / Chromium (port 5002)"
-cd "$SCRIPT_DIR/leg2_pyodide_chromium"
+pushd "$SCRIPT_DIR/leg2_pyodide_chromium" >/dev/null
 [ -d node_modules ] || npm install --silent
 ARTIFACT_2=$(du -sh node_modules 2>/dev/null | cut -f1)B
 
 node harness.js &
 LEG2_PID=$!
+PIDS_TO_KILL+=("$LEG2_PID")
 COLD_2=$(cold_start_ms 5002)
 ok "cold start: ${COLD_2}ms  artifact: $ARTIFACT_2"
 
@@ -97,16 +109,18 @@ HEY_2=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5002/")
 RSS_2=$(rss_mb "$LEG2_PID")
 kill "$LEG2_PID" 2>/dev/null; wait "$LEG2_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_2}MB  p50: $(hey_stat "$HEY_2" p50)ms  rps: $(hey_stat "$HEY_2" rps)"
+popd >/dev/null
 
 # ── LEG 3: Wasmtime ──────────────────────────────────────────────────────────
 info "Leg 3: Wasmtime (port 5003)"
-cd "$SCRIPT_DIR/leg3_wasmtime"
+pushd "$SCRIPT_DIR/leg3_wasmtime" >/dev/null
 cargo build --target wasm32-wasip2 --release --quiet 2>&1
 WASM=$(find target/wasm32-wasip2/release -maxdepth 1 -name "*.wasm" | head -1)
 ARTIFACT_3=$(du -sh "$WASM" | cut -f1)B
 
 wasmtime serve -S cli --addr "127.0.0.1:5003" "$WASM" &
 LEG3_PID=$!
+PIDS_TO_KILL+=("$LEG3_PID")
 COLD_3=$(cold_start_ms 5003)
 ok "cold start: ${COLD_3}ms  artifact: $ARTIFACT_3"
 
@@ -114,9 +128,16 @@ HEY_3=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5003/")
 RSS_3=$(rss_mb "$LEG3_PID")
 kill "$LEG3_PID" 2>/dev/null; wait "$LEG3_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_3}MB  p50: $(hey_stat "$HEY_3" p50)ms  rps: $(hey_stat "$HEY_3" rps)"
+popd >/dev/null
 
 # ── POSTGRES: shared database for legs 4a/4b ─────────────────────────────────
 info "Starting Postgres for legs 4a/4b/4c..."
+
+# Check port 5432 is available
+if lsof -i :5432 &>/dev/null; then
+  fail "Port 5432 already in use — stop local Postgres first"
+fi
+
 $CONTAINER_CMD rm -f bench-postgres &>/dev/null || true
 $CONTAINER_CMD run -d --name bench-postgres \
   -e POSTGRES_USER=bench \
@@ -139,15 +160,16 @@ ok "Database seeded"
 
 # ── LEG 4a: Flask + psycopg2 / direct Postgres ──────────────────────────────
 info "Leg 4a: Flask + psycopg2 / direct (port 5004)"
-cd "$SCRIPT_DIR/leg4a_flask_postgres"
+pushd "$SCRIPT_DIR/leg4a_flask_postgres" >/dev/null
 if [ ! -d .venv ]; then
   python3 -m venv .venv
-  .venv/bin/pip install --quiet flask psycopg2-binary
+  .venv/bin/pip install --quiet 'flask==3.1.*' 'psycopg2-binary==2.9.*'
 fi
 ARTIFACT_4A=$(du -sh .venv 2>/dev/null | cut -f1)B
 
 .venv/bin/python app.py &>/dev/null &
 LEG4A_PID=$!
+PIDS_TO_KILL+=("$LEG4A_PID")
 COLD_4A=$(cold_start_ms 5004 "/db?id=1")
 ok "cold start: ${COLD_4A}ms  artifact: $ARTIFACT_4A"
 
@@ -155,15 +177,17 @@ HEY_4A=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5004/db?id=1")
 RSS_4A=$(rss_mb "$LEG4A_PID")
 kill "$LEG4A_PID" 2>/dev/null; wait "$LEG4A_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_4A}MB  p50: $(hey_stat "$HEY_4A" p50)ms  rps: $(hey_stat "$HEY_4A" rps)"
+popd >/dev/null
 
 # ── LEG 4b: Node.js + Pyodide + pg bridge ───────────────────────────────────
 info "Leg 4b: Pyodide + pg bridge (port 5005)"
-cd "$SCRIPT_DIR/leg4b_wasm_postgres_bridge"
+pushd "$SCRIPT_DIR/leg4b_wasm_postgres_bridge" >/dev/null
 [ -d node_modules ] || npm install --silent
 ARTIFACT_4B=$(du -sh node_modules 2>/dev/null | cut -f1)B
 
 node harness.js &
 LEG4B_PID=$!
+PIDS_TO_KILL+=("$LEG4B_PID")
 COLD_4B=$(cold_start_ms 5005 "/db?id=1")
 ok "cold start: ${COLD_4B}ms  artifact: $ARTIFACT_4B"
 
@@ -171,10 +195,11 @@ HEY_4B=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5005/db?id=1")
 RSS_4B=$(rss_mb "$LEG4B_PID")
 kill "$LEG4B_PID" 2>/dev/null; wait "$LEG4B_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_4B}MB  p50: $(hey_stat "$HEY_4B" p50)ms  rps: $(hey_stat "$HEY_4B" rps)"
+popd >/dev/null
 
 # ── LEG 4c: Rust/Wasmtime + Node.js sidecar → Postgres ─────────────────────
 info "Leg 4c: Wasmtime + sidecar (port 5006)"
-cd "$SCRIPT_DIR/leg4c_wasmtime_postgres"
+pushd "$SCRIPT_DIR/leg4c_wasmtime_postgres" >/dev/null
 [ -d node_modules ] || npm install --silent
 cargo build --target wasm32-wasip2 --release --quiet 2>&1
 WASM_4C=$(find target/wasm32-wasip2/release -maxdepth 1 -name "*.wasm" | head -1)
@@ -182,6 +207,7 @@ ARTIFACT_4C=$(du -sh "$WASM_4C" | cut -f1)B
 
 node sidecar.js &
 SIDECAR_PID=$!
+PIDS_TO_KILL+=("$SIDECAR_PID")
 # Wait for sidecar
 for i in $(seq 1 50); do
   curl -sf "http://127.0.0.1:5007/query?id=1" &>/dev/null && break
@@ -192,6 +218,7 @@ curl -sf "http://127.0.0.1:5007/query?id=1" &>/dev/null \
 
 wasmtime serve -S cli -S inherit-network --addr "127.0.0.1:5006" "$WASM_4C" &
 LEG4C_PID=$!
+PIDS_TO_KILL+=("$LEG4C_PID")
 COLD_4C=$(cold_start_ms 5006 "/db?id=1")
 ok "cold start: ${COLD_4C}ms  artifact: $ARTIFACT_4C"
 
@@ -202,6 +229,7 @@ RSS_4C=$(( ${RSS_4C_WASM:-0} + ${RSS_4C_SIDE:-0} ))
 kill "$LEG4C_PID" 2>/dev/null; wait "$LEG4C_PID" 2>/dev/null || true
 kill "$SIDECAR_PID" 2>/dev/null; wait "$SIDECAR_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_4C}MB (wasm:${RSS_4C_WASM}+sidecar:${RSS_4C_SIDE})  p50: $(hey_stat "$HEY_4C" p50)ms  rps: $(hey_stat "$HEY_4C" rps)"
+popd >/dev/null
 
 # ── Postgres cleanup ─────────────────────────────────────────────────────────
 $CONTAINER_CMD rm -f bench-postgres &>/dev/null

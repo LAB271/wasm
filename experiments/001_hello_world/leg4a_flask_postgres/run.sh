@@ -17,7 +17,7 @@ cd "$SCRIPT_DIR"
 if [ ! -d .venv ]; then
   info "Creating virtual environment..."
   python3 -m venv .venv
-  .venv/bin/pip install --quiet flask psycopg2-binary
+  .venv/bin/pip install --quiet 'flask==3.1.*' 'psycopg2-binary==2.9.*'
 fi
 
 info "Starting Flask + psycopg2 on port $PORT..."

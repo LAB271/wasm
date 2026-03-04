@@ -31,6 +31,7 @@ def db_query():
             row = cur.fetchone()
         query_ms = (time.perf_counter() - t0) * 1000
     finally:
+        conn.rollback()
         db_pool.putconn(conn)
 
     if row is None:
