@@ -93,8 +93,8 @@ def handle_db(request_path, row):
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(body);
     } catch (err) {
-      res.writeHead(500);
-      res.end(String(err));
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: String(err) }));
     }
   });
 

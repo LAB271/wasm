@@ -40,6 +40,7 @@ def handle(request):
 - **Cold start**: wall-clock time from process launch to first successful `curl /` response
 - **Memory RSS**: `ps -o rss= -p $PID` captured after the warm benchmark completes
 - **Artifact size**: container image bytes (Leg 1), `node_modules` directory (Leg 2), `.wasm` binary (Leg 3)
+- **Note on legs 4a/4b**: Leg 4a uses Flask's single-threaded dev server while Leg 4b uses Node.js's async event loop. With `-c 1` (single concurrency) this is a fair comparison, but results would diverge under concurrent load
 
 ---
 
