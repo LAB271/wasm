@@ -90,6 +90,24 @@ def handle(request):
 
 Each leg can also be run standalone for debugging.
 
+## Testing
+
+Unit tests use [bats-core](https://github.com/bats-core/bats-core) to verify
+the shared helper functions in `lib/bench.sh`.
+
+```bash
+brew install bats-core   # one-time
+make test                # run unit tests
+make bench-quick         # quick benchmark (HEY_N=10)
+make bench               # full benchmark
+```
+
+`HEY_N` and `HEY_C` are overridable via environment variables:
+
+```bash
+HEY_N=50 HEY_C=2 ./benchmark.sh
+```
+
 ## Prerequisites
 
 Run `../../install.sh` from the repo root to verify your environment.
