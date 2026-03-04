@@ -202,9 +202,9 @@ $CONTAINER_CMD run -d --name bench-postgres \
   -p 5432:5432 \
   docker.io/library/postgres:16-alpine &>/dev/null
 
-# Wait for Postgres to accept connections
+# Wait for Postgres to accept connections AND the bench database to exist
 for i in $(seq 1 50); do
-  $CONTAINER_CMD exec bench-postgres pg_isready -U bench &>/dev/null && break
+  $CONTAINER_CMD exec bench-postgres psql -U bench -d bench -c '\q' &>/dev/null && break
   sleep 0.2
 done
 ok "Postgres ready"
