@@ -31,11 +31,11 @@ now_ms() { python3 -c "import time; print(int(time.time()*1000))"; }
 
 # ── Helper: cold-start measurement ──────────────────────────────────────────
 cold_start_ms() {
-  local port=$1
+  local port=$1 path=${2:-/}
   local start end
   start=$(now_ms)
   for i in $(seq 1 100); do
-    curl -sf "http://127.0.0.1:$port/" &>/dev/null && break
+    curl -sf "http://127.0.0.1:$port$path" &>/dev/null && break
     sleep 0.1
   done
   end=$(now_ms)
@@ -115,9 +115,70 @@ RSS_3=$(rss_mb "$LEG3_PID")
 kill "$LEG3_PID" 2>/dev/null; wait "$LEG3_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_3}MB  p50: $(hey_stat "$HEY_3" p50)ms  rps: $(hey_stat "$HEY_3" rps)"
 
+# ── POSTGRES: shared database for legs 4a/4b ─────────────────────────────────
+info "Starting Postgres for legs 4a/4b..."
+$CONTAINER_CMD rm -f bench-postgres &>/dev/null || true
+$CONTAINER_CMD run -d --name bench-postgres \
+  -e POSTGRES_USER=bench \
+  -e POSTGRES_PASSWORD=bench \
+  -e POSTGRES_DB=bench \
+  -p 5432:5432 \
+  docker.io/library/postgres:16-alpine &>/dev/null
+
+# Wait for Postgres to accept connections
+for i in $(seq 1 50); do
+  $CONTAINER_CMD exec bench-postgres pg_isready -U bench &>/dev/null && break
+  sleep 0.2
+done
+ok "Postgres ready"
+
+# Seed the items table
+$CONTAINER_CMD cp "$SCRIPT_DIR/shared/postgres_init.sql" bench-postgres:/tmp/init.sql
+$CONTAINER_CMD exec bench-postgres psql -U bench -d bench -f /tmp/init.sql &>/dev/null
+ok "Database seeded"
+
+# ── LEG 4a: Flask + psycopg2 / direct Postgres ──────────────────────────────
+info "Leg 4a: Flask + psycopg2 / direct (port 5004)"
+cd "$SCRIPT_DIR/leg4a_flask_postgres"
+if [ ! -d .venv ]; then
+  python3 -m venv .venv
+  .venv/bin/pip install --quiet flask psycopg2-binary
+fi
+ARTIFACT_4A=$(du -sh .venv 2>/dev/null | cut -f1)B
+
+.venv/bin/python app.py &
+LEG4A_PID=$!
+COLD_4A=$(cold_start_ms 5004 "/db?id=1")
+ok "cold start: ${COLD_4A}ms  artifact: $ARTIFACT_4A"
+
+HEY_4A=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5004/db?id=1")
+RSS_4A=$(rss_mb "$LEG4A_PID")
+kill "$LEG4A_PID" 2>/dev/null; wait "$LEG4A_PID" 2>/dev/null || true
+ok "hey done  rss: ${RSS_4A}MB  p50: $(hey_stat "$HEY_4A" p50)ms  rps: $(hey_stat "$HEY_4A" rps)"
+
+# ── LEG 4b: Node.js + Pyodide + pg bridge ───────────────────────────────────
+info "Leg 4b: Pyodide + pg bridge (port 5005)"
+cd "$SCRIPT_DIR/leg4b_wasm_postgres_bridge"
+[ -d node_modules ] || npm install --silent
+ARTIFACT_4B=$(du -sh node_modules 2>/dev/null | cut -f1)B
+
+node harness.js &
+LEG4B_PID=$!
+COLD_4B=$(cold_start_ms 5005 "/db?id=1")
+ok "cold start: ${COLD_4B}ms  artifact: $ARTIFACT_4B"
+
+HEY_4B=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5005/db?id=1")
+RSS_4B=$(rss_mb "$LEG4B_PID")
+kill "$LEG4B_PID" 2>/dev/null; wait "$LEG4B_PID" 2>/dev/null || true
+ok "hey done  rss: ${RSS_4B}MB  p50: $(hey_stat "$HEY_4B" p50)ms  rps: $(hey_stat "$HEY_4B" rps)"
+
+# ── Postgres cleanup ─────────────────────────────────────────────────────────
+$CONTAINER_CMD rm -f bench-postgres &>/dev/null
+ok "Postgres stopped"
+
 # ── Results table ─────────────────────────────────────────────────────────────
 echo ""
-echo "## Results"
+echo "## Results — Hello World (legs 1–3)"
 echo ""
 printf "| %-22s | %-20s | %-22s | %-16s |\n" "Metric" "Leg 1 Flask/Podman" "Leg 2 Pyodide/Chrome" "Leg 3 Wasmtime"
 printf "| %-22s | %-20s | %-22s | %-16s |\n" "---" "---" "---" "---"
@@ -127,4 +188,16 @@ printf "| %-22s | %-20s | %-22s | %-16s |\n" "Memory RSS (MB)"      "${RSS_1}"  
 printf "| %-22s | %-20s | %-22s | %-16s |\n" "hey p50 (ms)"         "$(hey_stat "$HEY_1" p50)"      "$(hey_stat "$HEY_2" p50)"       "$(hey_stat "$HEY_3" p50)"
 printf "| %-22s | %-20s | %-22s | %-16s |\n" "hey p99 (ms)"         "$(hey_stat "$HEY_1" p99)"      "$(hey_stat "$HEY_2" p99)"       "$(hey_stat "$HEY_3" p99)"
 printf "| %-22s | %-20s | %-22s | %-16s |\n" "hey req/s"            "$(hey_stat "$HEY_1" rps)"      "$(hey_stat "$HEY_2" rps)"       "$(hey_stat "$HEY_3" rps)"
+echo ""
+
+echo "## Results — Postgres DB query (legs 4a/4b)"
+echo ""
+printf "| %-22s | %-24s | %-24s |\n" "Metric" "Leg 4a Flask+psycopg2" "Leg 4b Pyodide+pg bridge"
+printf "| %-22s | %-24s | %-24s |\n" "---" "---" "---"
+printf "| %-22s | %-24s | %-24s |\n" "Artifact size"        "$ARTIFACT_4A"                    "$ARTIFACT_4B"
+printf "| %-22s | %-24s | %-24s |\n" "Cold start (ms)"      "${COLD_4A}"                       "${COLD_4B}"
+printf "| %-22s | %-24s | %-24s |\n" "Memory RSS (MB)"      "${RSS_4A}"                        "${RSS_4B}"
+printf "| %-22s | %-24s | %-24s |\n" "hey p50 (ms)"         "$(hey_stat "$HEY_4A" p50)"        "$(hey_stat "$HEY_4B" p50)"
+printf "| %-22s | %-24s | %-24s |\n" "hey p99 (ms)"         "$(hey_stat "$HEY_4A" p99)"        "$(hey_stat "$HEY_4B" p99)"
+printf "| %-22s | %-24s | %-24s |\n" "hey req/s"            "$(hey_stat "$HEY_4A" rps)"        "$(hey_stat "$HEY_4B" rps)"
 echo ""

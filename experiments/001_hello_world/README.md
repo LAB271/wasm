@@ -5,7 +5,11 @@ Validates the core claim from
 that WASM runtimes can replace Docker containers for serverless-style workloads with lower cold
 starts, smaller artifacts, and reduced memory.
 
-All three legs implement the same handler:
+Legs 1–3 implement the same handler. Legs 4a/4b extend the experiment with
+database access to measure whether the WASM host bridge pattern adds meaningful
+latency compared to a traditional direct database connection.
+
+All three Hello World legs implement the same handler:
 
 ```python
 def handle(request):
@@ -22,6 +26,8 @@ def handle(request):
 | H2 | **Cold start**: Podman slowest (~500ms+); Wasmtime fastest (<50ms); Pyodide/Chromium in between (~2–5s due to Chromium launch + Pyodide WASM init) | — |
 | H3 | **Memory**: Chromium process heaviest (300MB+); Flask/Podman moderate (~50MB); Wasmtime lightest (<10MB) | — |
 | H4 | **Warm p50**: All three comparable once runtime is loaded; Wasmtime expected fastest raw handler | — |
+| H5 | **Bridge overhead vs direct**: Negligible — dominated by actual query execution time | — |
+| H6 | **Connection pool location**: Host-side pool is equivalent to in-process pool | — |
 
 *Status column: fill with **confirmed** / **refuted** / **partially confirmed** after running `benchmark.sh`.*
 
@@ -38,7 +44,9 @@ def handle(request):
 
 ## Results
 
-*Run `./benchmark.sh` to populate this table.*
+*Run `./benchmark.sh` to populate these tables.*
+
+### Hello World (legs 1–3)
 
 | Metric | Leg 1 Flask/Podman | Leg 2 Pyodide/Chrome | Leg 3 Wasmtime |
 |---|---|---|---|
@@ -49,6 +57,17 @@ def handle(request):
 | hey p99 (ms) | | | |
 | hey req/s | | | |
 
+### Postgres DB query (legs 4a/4b)
+
+| Metric | Leg 4a Flask+psycopg2 | Leg 4b Pyodide+pg bridge |
+|---|---|---|
+| Artifact size | | |
+| Cold start (ms) | | |
+| Memory RSS (MB) | | |
+| hey p50 (ms) | | |
+| hey p99 (ms) | | |
+| hey req/s | | |
+
 ---
 
 ## Legs
@@ -58,6 +77,8 @@ def handle(request):
 | 1 | Flask in Podman/Docker container | 5001 | `leg1_flask_docker/run.sh` |
 | 2 | Python via Pyodide in headless Chromium (Node.js) | 5002 | `leg2_pyodide_chromium/run.sh` |
 | 3 | Rust compiled to `wasm32-wasip2`, served via `wasmtime serve` | 5003 | `leg3_wasmtime/run.sh` |
+| 4a | Flask + psycopg2 → Postgres (direct connection) | 5004 | `leg4a_flask_postgres/run.sh` |
+| 4b | Pyodide + Node.js pg bridge → Postgres (host bridge) | 5005 | `leg4b_wasm_postgres_bridge/run.sh` |
 
 Each leg can also be run standalone for debugging.
 
