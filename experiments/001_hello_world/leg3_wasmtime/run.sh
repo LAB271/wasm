@@ -29,7 +29,7 @@ fi
 echo "→ Binary: $WASM ($(du -sh "$WASM" | cut -f1))"
 
 echo "→ Starting wasmtime serve on port $PORT..."
-wasmtime serve --addr "127.0.0.1:$PORT" "$WASM" &
+wasmtime serve -S cli --addr "127.0.0.1:$PORT" "$WASM" &
 WASMTIME_PID=$!
 
 # Wait for readiness

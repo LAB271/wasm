@@ -105,7 +105,7 @@ cargo build --target wasm32-wasip2 --release --quiet 2>&1
 WASM=$(find target/wasm32-wasip2/release -maxdepth 1 -name "*.wasm" | head -1)
 ARTIFACT_3=$(du -sh "$WASM" | cut -f1)B
 
-wasmtime serve --addr "127.0.0.1:5003" "$WASM" &
+wasmtime serve -S cli --addr "127.0.0.1:5003" "$WASM" &
 LEG3_PID=$!
 COLD_3=$(cold_start_ms 5003)
 ok "cold start: ${COLD_3}ms  artifact: $ARTIFACT_3"
