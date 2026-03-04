@@ -1,0 +1,12 @@
+{
+  "name": "leg2a-pyodide-node",
+  "version": "1.0.0",
+  "description": "Hello World via Pyodide running directly in Node.js (no browser)",
+  "main": "harness.js",
+  "scripts": {
+    "start": "node harness.js"
+  },
+  "dependencies": {
+    "pyodide": "0.26.4"
+  }
+}

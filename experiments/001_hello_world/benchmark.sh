@@ -93,22 +93,52 @@ RSS_1=$(rss_mb "$LEG1_PID")
 $CONTAINER_CMD rm -f leg1-flask &>/dev/null
 ok "hey done  rss: ${RSS_1}MB  p50: $(hey_stat "$HEY_1" p50)ms  rps: $(hey_stat "$HEY_1" rps)"
 
-# ── LEG 2: Pyodide / Chromium ────────────────────────────────────────────────
-info "Leg 2: Pyodide / Chromium (port 5002)"
-pushd "$SCRIPT_DIR/leg2_pyodide_chromium" >/dev/null
+# ── LEG 2a: Pyodide / Node.js (no browser) ───────────────────────────────────
+info "Leg 2a: Pyodide / Node.js (port 5002)"
+pushd "$SCRIPT_DIR/leg2a_pyodide_node" >/dev/null
 [ -d node_modules ] || npm install --silent
-ARTIFACT_2=$(du -sh node_modules 2>/dev/null | cut -f1)B
+ARTIFACT_2A=$(du -sh node_modules 2>/dev/null | cut -f1)B
 
 node harness.js &
-LEG2_PID=$!
-PIDS_TO_KILL+=("$LEG2_PID")
-COLD_2=$(cold_start_ms 5002)
-ok "cold start: ${COLD_2}ms  artifact: $ARTIFACT_2"
+LEG2A_PID=$!
+PIDS_TO_KILL+=("$LEG2A_PID")
+COLD_2A=$(cold_start_ms 5002)
+ok "cold start: ${COLD_2A}ms  artifact: $ARTIFACT_2A"
 
-HEY_2=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5002/")
-RSS_2=$(rss_mb "$LEG2_PID")
-kill "$LEG2_PID" 2>/dev/null; wait "$LEG2_PID" 2>/dev/null || true
-ok "hey done  rss: ${RSS_2}MB  p50: $(hey_stat "$HEY_2" p50)ms  rps: $(hey_stat "$HEY_2" rps)"
+HEY_2A=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5002/")
+RSS_2A=$(rss_mb "$LEG2A_PID")
+kill "$LEG2A_PID" 2>/dev/null; wait "$LEG2A_PID" 2>/dev/null || true
+ok "hey done  rss: ${RSS_2A}MB  p50: $(hey_stat "$HEY_2A" p50)ms  rps: $(hey_stat "$HEY_2A" rps)"
+popd >/dev/null
+
+# ── LEG 2b: Pyodide / Chromium (real headless Chrome) ────────────────────────
+info "Leg 2b: Pyodide / Chromium (port 5008)"
+pushd "$SCRIPT_DIR/leg2b_pyodide_chromium" >/dev/null
+[ -d node_modules ] || npm install --silent
+ARTIFACT_2B=$(du -sh node_modules 2>/dev/null | cut -f1)B
+
+node harness.js &
+LEG2B_PID=$!
+PIDS_TO_KILL+=("$LEG2B_PID")
+COLD_2B=$(cold_start_ms 5008)
+ok "cold start: ${COLD_2B}ms  artifact: $ARTIFACT_2B"
+
+HEY_2B=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5008/")
+# Sum RSS of Node.js harness + all Chrome descendant processes
+# (Chrome spawns renderer, GPU, utility children — pgrep -P only finds direct children)
+descendant_pids() {
+  local parent=$1
+  for child in $(pgrep -P "$parent" 2>/dev/null); do
+    echo "$child"
+    descendant_pids "$child"
+  done
+}
+RSS_2B_NODE=$(rss_mb "$LEG2B_PID")
+RSS_2B_CHROME=$(descendant_pids "$LEG2B_PID" | xargs -I{} ps -o rss= -p {} 2>/dev/null | awk '{s+=$1} END{printf "%.0f", s/1024}')
+RSS_2B_CHROME=${RSS_2B_CHROME:-0}
+RSS_2B=$(( ${RSS_2B_NODE:-0} + RSS_2B_CHROME ))
+kill "$LEG2B_PID" 2>/dev/null; wait "$LEG2B_PID" 2>/dev/null || true
+ok "hey done  rss: ${RSS_2B}MB (node:${RSS_2B_NODE}+chrome:${RSS_2B_CHROME})  p50: $(hey_stat "$HEY_2B" p50)ms  rps: $(hey_stat "$HEY_2B" rps)"
 popd >/dev/null
 
 # ── LEG 3: Wasmtime ──────────────────────────────────────────────────────────
@@ -239,14 +269,14 @@ ok "Postgres stopped"
 echo ""
 echo "## Results — Hello World (legs 1–3)"
 echo ""
-printf "| %-22s | %-20s | %-22s | %-16s |\n" "Metric" "Leg 1 Flask/Podman" "Leg 2 Pyodide/Chrome" "Leg 3 Wasmtime"
-printf "| %-22s | %-20s | %-22s | %-16s |\n" "---" "---" "---" "---"
-printf "| %-22s | %-20s | %-22s | %-16s |\n" "Artifact size"        "$ARTIFACT_1"                  "$ARTIFACT_2"                   "$ARTIFACT_3"
-printf "| %-22s | %-20s | %-22s | %-16s |\n" "Cold start (ms)"      "${COLD_1}"                     "${COLD_2}"                      "${COLD_3}"
-printf "| %-22s | %-20s | %-22s | %-16s |\n" "Memory RSS (MB)"      "${RSS_1}"                      "${RSS_2}"                       "${RSS_3}"
-printf "| %-22s | %-20s | %-22s | %-16s |\n" "hey p50 (ms)"         "$(hey_stat "$HEY_1" p50)"      "$(hey_stat "$HEY_2" p50)"       "$(hey_stat "$HEY_3" p50)"
-printf "| %-22s | %-20s | %-22s | %-16s |\n" "hey p99 (ms)"         "$(hey_stat "$HEY_1" p99)"      "$(hey_stat "$HEY_2" p99)"       "$(hey_stat "$HEY_3" p99)"
-printf "| %-22s | %-20s | %-22s | %-16s |\n" "hey req/s"            "$(hey_stat "$HEY_1" rps)"      "$(hey_stat "$HEY_2" rps)"       "$(hey_stat "$HEY_3" rps)"
+printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "Metric" "Leg 1 Flask/Podman" "Leg 2a Pyodide/Node" "Leg 2b Pyodide/Chrome" "Leg 3 Wasmtime"
+printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "---" "---" "---" "---" "---"
+printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "Artifact size"        "$ARTIFACT_1"                  "$ARTIFACT_2A"                  "$ARTIFACT_2B"                  "$ARTIFACT_3"
+printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "Cold start (ms)"      "${COLD_1}"                     "${COLD_2A}"                     "${COLD_2B}"                     "${COLD_3}"
+printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "Memory RSS (MB)"      "${RSS_1}"                      "${RSS_2A}"                      "${RSS_2B}"                      "${RSS_3}"
+printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "hey p50 (ms)"         "$(hey_stat "$HEY_1" p50)"      "$(hey_stat "$HEY_2A" p50)"      "$(hey_stat "$HEY_2B" p50)"      "$(hey_stat "$HEY_3" p50)"
+printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "hey p99 (ms)"         "$(hey_stat "$HEY_1" p99)"      "$(hey_stat "$HEY_2A" p99)"      "$(hey_stat "$HEY_2B" p99)"      "$(hey_stat "$HEY_3" p99)"
+printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "hey req/s"            "$(hey_stat "$HEY_1" rps)"      "$(hey_stat "$HEY_2A" rps)"      "$(hey_stat "$HEY_2B" rps)"      "$(hey_stat "$HEY_3" rps)"
 echo ""
 
 echo "## Results — Postgres DB query (legs 4a/4b/4c)"
