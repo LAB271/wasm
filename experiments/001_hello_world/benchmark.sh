@@ -45,7 +45,7 @@ cold_start_ms() {
 # ── Helper: RSS in MB ────────────────────────────────────────────────────────
 rss_mb() {
   local pid=$1
-  ps -o rss= -p "$pid" 2>/dev/null | awk '{printf "%.0f", $1/1024}' || echo "?"
+  ps -o rss= -p "$pid" 2>/dev/null | awk '{printf "%.0f", $1/1024}' || echo "0"
 }
 
 # ── Helper: parse hey output ─────────────────────────────────────────────────
@@ -116,7 +116,7 @@ kill "$LEG3_PID" 2>/dev/null; wait "$LEG3_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_3}MB  p50: $(hey_stat "$HEY_3" p50)ms  rps: $(hey_stat "$HEY_3" rps)"
 
 # ── POSTGRES: shared database for legs 4a/4b ─────────────────────────────────
-info "Starting Postgres for legs 4a/4b..."
+info "Starting Postgres for legs 4a/4b/4c..."
 $CONTAINER_CMD rm -f bench-postgres &>/dev/null || true
 $CONTAINER_CMD run -d --name bench-postgres \
   -e POSTGRES_USER=bench \
@@ -172,6 +172,37 @@ RSS_4B=$(rss_mb "$LEG4B_PID")
 kill "$LEG4B_PID" 2>/dev/null; wait "$LEG4B_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_4B}MB  p50: $(hey_stat "$HEY_4B" p50)ms  rps: $(hey_stat "$HEY_4B" rps)"
 
+# ── LEG 4c: Rust/Wasmtime + Node.js sidecar → Postgres ─────────────────────
+info "Leg 4c: Wasmtime + sidecar (port 5006)"
+cd "$SCRIPT_DIR/leg4c_wasmtime_postgres"
+[ -d node_modules ] || npm install --silent
+cargo build --target wasm32-wasip2 --release --quiet 2>&1
+WASM_4C=$(find target/wasm32-wasip2/release -maxdepth 1 -name "*.wasm" | head -1)
+ARTIFACT_4C=$(du -sh "$WASM_4C" | cut -f1)B
+
+node sidecar.js &
+SIDECAR_PID=$!
+# Wait for sidecar
+for i in $(seq 1 50); do
+  curl -sf "http://127.0.0.1:5007/query?id=1" &>/dev/null && break
+  sleep 0.1
+done
+curl -sf "http://127.0.0.1:5007/query?id=1" &>/dev/null \
+  || fail "Sidecar did not become ready on port 5007"
+
+wasmtime serve -S cli -S inherit-network --addr "127.0.0.1:5006" "$WASM_4C" &
+LEG4C_PID=$!
+COLD_4C=$(cold_start_ms 5006 "/db?id=1")
+ok "cold start: ${COLD_4C}ms  artifact: $ARTIFACT_4C"
+
+HEY_4C=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5006/db?id=1")
+RSS_4C_WASM=$(rss_mb "$LEG4C_PID")
+RSS_4C_SIDE=$(rss_mb "$SIDECAR_PID")
+RSS_4C=$(( ${RSS_4C_WASM:-0} + ${RSS_4C_SIDE:-0} ))
+kill "$LEG4C_PID" 2>/dev/null; wait "$LEG4C_PID" 2>/dev/null || true
+kill "$SIDECAR_PID" 2>/dev/null; wait "$SIDECAR_PID" 2>/dev/null || true
+ok "hey done  rss: ${RSS_4C}MB (wasm:${RSS_4C_WASM}+sidecar:${RSS_4C_SIDE})  p50: $(hey_stat "$HEY_4C" p50)ms  rps: $(hey_stat "$HEY_4C" rps)"
+
 # ── Postgres cleanup ─────────────────────────────────────────────────────────
 $CONTAINER_CMD rm -f bench-postgres &>/dev/null
 ok "Postgres stopped"
@@ -190,14 +221,14 @@ printf "| %-22s | %-20s | %-22s | %-16s |\n" "hey p99 (ms)"         "$(hey_stat 
 printf "| %-22s | %-20s | %-22s | %-16s |\n" "hey req/s"            "$(hey_stat "$HEY_1" rps)"      "$(hey_stat "$HEY_2" rps)"       "$(hey_stat "$HEY_3" rps)"
 echo ""
 
-echo "## Results — Postgres DB query (legs 4a/4b)"
+echo "## Results — Postgres DB query (legs 4a/4b/4c)"
 echo ""
-printf "| %-22s | %-24s | %-24s |\n" "Metric" "Leg 4a Flask+psycopg2" "Leg 4b Pyodide+pg bridge"
-printf "| %-22s | %-24s | %-24s |\n" "---" "---" "---"
-printf "| %-22s | %-24s | %-24s |\n" "Artifact size"        "$ARTIFACT_4A"                    "$ARTIFACT_4B"
-printf "| %-22s | %-24s | %-24s |\n" "Cold start (ms)"      "${COLD_4A}"                       "${COLD_4B}"
-printf "| %-22s | %-24s | %-24s |\n" "Memory RSS (MB)"      "${RSS_4A}"                        "${RSS_4B}"
-printf "| %-22s | %-24s | %-24s |\n" "hey p50 (ms)"         "$(hey_stat "$HEY_4A" p50)"        "$(hey_stat "$HEY_4B" p50)"
-printf "| %-22s | %-24s | %-24s |\n" "hey p99 (ms)"         "$(hey_stat "$HEY_4A" p99)"        "$(hey_stat "$HEY_4B" p99)"
-printf "| %-22s | %-24s | %-24s |\n" "hey req/s"            "$(hey_stat "$HEY_4A" rps)"        "$(hey_stat "$HEY_4B" rps)"
+printf "| %-22s | %-24s | %-24s | %-24s |\n" "Metric" "Leg 4a Flask+psycopg2" "Leg 4b Pyodide+pg bridge" "Leg 4c Wasmtime+sidecar"
+printf "| %-22s | %-24s | %-24s | %-24s |\n" "---" "---" "---" "---"
+printf "| %-22s | %-24s | %-24s | %-24s |\n" "Artifact size"        "$ARTIFACT_4A"                    "$ARTIFACT_4B"                    "$ARTIFACT_4C"
+printf "| %-22s | %-24s | %-24s | %-24s |\n" "Cold start (ms)"      "${COLD_4A}"                       "${COLD_4B}"                       "${COLD_4C}"
+printf "| %-22s | %-24s | %-24s | %-24s |\n" "Memory RSS (MB)"      "${RSS_4A}"                        "${RSS_4B}"                        "${RSS_4C}"
+printf "| %-22s | %-24s | %-24s | %-24s |\n" "hey p50 (ms)"         "$(hey_stat "$HEY_4A" p50)"        "$(hey_stat "$HEY_4B" p50)"        "$(hey_stat "$HEY_4C" p50)"
+printf "| %-22s | %-24s | %-24s | %-24s |\n" "hey p99 (ms)"         "$(hey_stat "$HEY_4A" p99)"        "$(hey_stat "$HEY_4B" p99)"        "$(hey_stat "$HEY_4C" p99)"
+printf "| %-22s | %-24s | %-24s | %-24s |\n" "hey req/s"            "$(hey_stat "$HEY_4A" rps)"        "$(hey_stat "$HEY_4B" rps)"        "$(hey_stat "$HEY_4C" rps)"
 echo ""
