@@ -52,8 +52,8 @@ rss_mb() {
 hey_stat() {
   local out=$1 stat=$2
   case "$stat" in
-    p50) echo "$out" | grep "50% in" | awk '{printf "%.1f", $3*1000}' ;;
-    p99) echo "$out" | grep "99% in" | awk '{printf "%.1f", $3*1000}' ;;
+    p50) echo "$out" | grep "50%%" | awk '{printf "%.1f", $3*1000}' ;;
+    p99) echo "$out" | grep "99%%" | awk '{printf "%.1f", $3*1000}' ;;
     rps) echo "$out" | grep "Requests/sec:" | awk '{printf "%.0f", $2}' ;;
   esac
 }
