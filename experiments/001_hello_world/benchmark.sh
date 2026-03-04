@@ -189,12 +189,12 @@ popd >/dev/null
 # ── POSTGRES: shared database for legs 4a/4b ─────────────────────────────────
 info "Starting Postgres for legs 4a/4b/4c..."
 
-# Check port 5432 is available
+# Clean up any leftover container first, then check port
+$CONTAINER_CMD rm -f bench-postgres &>/dev/null || true
+sleep 0.5
 if lsof -i :5432 &>/dev/null; then
   fail "Port 5432 already in use — stop local Postgres first"
 fi
-
-$CONTAINER_CMD rm -f bench-postgres &>/dev/null || true
 $CONTAINER_CMD run -d --name bench-postgres \
   -e POSTGRES_USER=bench \
   -e POSTGRES_PASSWORD=bench \
