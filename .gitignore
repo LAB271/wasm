@@ -1,3 +1,11 @@
+./.claude
+
+# Experiment build artifacts
+node_modules/
+experiments/**/node_modules/
+experiments/**/target/
+Cargo.lock
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
