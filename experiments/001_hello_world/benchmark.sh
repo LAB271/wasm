@@ -164,6 +164,7 @@ RSS_2C_CHROME=${RSS_2C_CHROME:-0}
 RSS_2C=$(( ${RSS_2C_NODE:-0} + RSS_2C_CHROME ))
 kill "$LEG2C_PID" 2>/dev/null; wait "$LEG2C_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_2C}MB (node:${RSS_2C_NODE}+chrome:${RSS_2C_CHROME})  p50: $(hey_stat "$HEY_2C" p50)ms  rps: $(hey_stat "$HEY_2C" rps)"
+unset PLAYWRIGHT_BROWSERS_PATH
 popd >/dev/null
 
 # ── LEG 3: Wasmtime ──────────────────────────────────────────────────────────
@@ -292,7 +293,7 @@ ok "Postgres stopped"
 
 # ── Results table ─────────────────────────────────────────────────────────────
 echo ""
-echo "## Results — Hello World (legs 1–3)"
+echo "## Results — Hello World (legs 1–3, incl. 2a/2b/2c variants)"
 echo ""
 printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "Metric" "Leg 1 Flask/Podman" "Leg 2a Pyodide/Node" "Leg 2b Pyodide/Chrome" "Leg 2c Pyodide/Playwright" "Leg 3 Wasmtime"
 printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "---" "---" "---" "---" "---" "---"
