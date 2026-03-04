@@ -146,7 +146,7 @@ if [ ! -d .venv ]; then
 fi
 ARTIFACT_4A=$(du -sh .venv 2>/dev/null | cut -f1)B
 
-.venv/bin/python app.py &
+.venv/bin/python app.py &>/dev/null &
 LEG4A_PID=$!
 COLD_4A=$(cold_start_ms 5004 "/db?id=1")
 ok "cold start: ${COLD_4A}ms  artifact: $ARTIFACT_4A"
