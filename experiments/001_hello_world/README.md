@@ -5,7 +5,7 @@ Validates the core claim from
 that WASM runtimes can replace Docker containers for serverless-style workloads with lower cold
 starts, smaller artifacts, and reduced memory.
 
-Legs 1–3 implement the same handler. Legs 4a/4b extend the experiment with
+Legs 1–3 implement the same handler. Legs 4a/4b/4c extend the experiment with
 database access to measure whether the WASM host bridge pattern adds meaningful
 latency compared to a traditional direct database connection.
 
@@ -28,6 +28,7 @@ def handle(request):
 | H4 | **Warm p50**: All three comparable once runtime is loaded; Wasmtime expected fastest raw handler | — |
 | H5 | **Bridge overhead vs direct**: Negligible — dominated by actual query execution time | — |
 | H6 | **Connection pool location**: Host-side pool is equivalent to in-process pool | — |
+| H7 | **Double-hop latency**: WASM→sidecar→Postgres adds measurable but acceptable overhead vs single-hop | — |
 
 *Status column: fill with **confirmed** / **refuted** / **partially confirmed** after running `benchmark.sh`.*
 
@@ -57,16 +58,16 @@ def handle(request):
 | hey p99 (ms) | | | |
 | hey req/s | | | |
 
-### Postgres DB query (legs 4a/4b)
+### Postgres DB query (legs 4a/4b/4c)
 
-| Metric | Leg 4a Flask+psycopg2 | Leg 4b Pyodide+pg bridge |
-|---|---|---|
-| Artifact size | | |
-| Cold start (ms) | | |
-| Memory RSS (MB) | | |
-| hey p50 (ms) | | |
-| hey p99 (ms) | | |
-| hey req/s | | |
+| Metric | Leg 4a Flask+psycopg2 | Leg 4b Pyodide+pg bridge | Leg 4c Wasmtime+sidecar |
+|---|---|---|---|
+| Artifact size | | | |
+| Cold start (ms) | | | |
+| Memory RSS (MB) | | | |
+| hey p50 (ms) | | | |
+| hey p99 (ms) | | | |
+| hey req/s | | | |
 
 ---
 
@@ -79,6 +80,7 @@ def handle(request):
 | 3 | Rust compiled to `wasm32-wasip2`, served via `wasmtime serve` | 5003 | `leg3_wasmtime/run.sh` |
 | 4a | Flask + psycopg2 → Postgres (direct connection) | 5004 | `leg4a_flask_postgres/run.sh` |
 | 4b | Pyodide + Node.js pg bridge → Postgres (host bridge) | 5005 | `leg4b_wasm_postgres_bridge/run.sh` |
+| 4c | Rust/Wasmtime + Node.js sidecar → Postgres (HTTP bridge) | 5006 | `leg4c_wasmtime_postgres/run.sh` |
 
 Each leg can also be run standalone for debugging.
 
