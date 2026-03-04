@@ -34,6 +34,10 @@ def handle(request_path):
   server.listen(PORT, "127.0.0.1", () => {
     console.log(`→ Listening on http://127.0.0.1:${PORT}/`);
   });
+
+  const shutdown = () => { server.close(); process.exit(0); };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 main().catch((err) => {

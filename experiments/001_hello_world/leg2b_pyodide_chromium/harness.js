@@ -4,6 +4,7 @@ const http = require("http");
 const puppeteer = require("puppeteer");
 
 const PORT = 5008;
+// Pin to exact version — must match leg2a's npm "pyodide" version
 const PYODIDE_CDN = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js";
 
 async function main() {
@@ -48,16 +49,9 @@ def handle(request_path):
     console.log(`→ Listening on http://127.0.0.1:${PORT}/`);
   });
 
-  process.on("SIGTERM", async () => {
-    server.close();
-    await browser.close();
-    process.exit(0);
-  });
-  process.on("SIGINT", async () => {
-    server.close();
-    await browser.close();
-    process.exit(0);
-  });
+  const shutdown = async () => { server.close(); await browser.close(); process.exit(0); };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 main().catch((err) => {

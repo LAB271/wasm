@@ -7,6 +7,6 @@
     "start": "node harness.js"
   },
   "dependencies": {
-    "pyodide": "^0.26.0"
+    "pyodide": "0.26.4"
   }
 }

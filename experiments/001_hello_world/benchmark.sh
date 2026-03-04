@@ -124,10 +124,19 @@ COLD_2B=$(cold_start_ms 5008)
 ok "cold start: ${COLD_2B}ms  artifact: $ARTIFACT_2B"
 
 HEY_2B=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5008/")
-# Sum RSS of Node.js harness + Chrome child processes
+# Sum RSS of Node.js harness + all Chrome descendant processes
+# (Chrome spawns renderer, GPU, utility children — pgrep -P only finds direct children)
+descendant_pids() {
+  local parent=$1
+  for child in $(pgrep -P "$parent" 2>/dev/null); do
+    echo "$child"
+    descendant_pids "$child"
+  done
+}
 RSS_2B_NODE=$(rss_mb "$LEG2B_PID")
-RSS_2B_CHROME=$(pgrep -P "$LEG2B_PID" 2>/dev/null | xargs -I{} ps -o rss= -p {} 2>/dev/null | awk '{s+=$1} END{printf "%.0f", s/1024}' || echo "0")
-RSS_2B=$(( ${RSS_2B_NODE:-0} + ${RSS_2B_CHROME:-0} ))
+RSS_2B_CHROME=$(descendant_pids "$LEG2B_PID" | xargs -I{} ps -o rss= -p {} 2>/dev/null | awk '{s+=$1} END{printf "%.0f", s/1024}')
+RSS_2B_CHROME=${RSS_2B_CHROME:-0}
+RSS_2B=$(( ${RSS_2B_NODE:-0} + RSS_2B_CHROME ))
 kill "$LEG2B_PID" 2>/dev/null; wait "$LEG2B_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_2B}MB (node:${RSS_2B_NODE}+chrome:${RSS_2B_CHROME})  p50: $(hey_stat "$HEY_2B" p50)ms  rps: $(hey_stat "$HEY_2B" rps)"
 popd >/dev/null
