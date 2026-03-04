@@ -38,10 +38,12 @@ WASM=$(find target/wasm32-wasip2/release -maxdepth 1 -name "*.wasm" | head -1)
 ok "Binary: $WASM ($(du -sh "$WASM" | cut -f1))"
 
 cleanup() {
-  kill "$SIDECAR_PID" 2>/dev/null || true
   kill "$WASMTIME_PID" 2>/dev/null || true
+  kill "$SIDECAR_PID" 2>/dev/null || true
+  wait "$WASMTIME_PID" 2>/dev/null || true
+  wait "$SIDECAR_PID" 2>/dev/null || true
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # Start sidecar
 info "Starting Node.js sidecar on port $SIDECAR_PORT..."
@@ -53,6 +55,8 @@ for i in $(seq 1 50); do
   curl -sf "http://127.0.0.1:$SIDECAR_PORT/query?id=1" &>/dev/null && break
   sleep 0.1
 done
+curl -sf "http://127.0.0.1:$SIDECAR_PORT/query?id=1" &>/dev/null \
+  || fail "Sidecar did not become ready on port $SIDECAR_PORT"
 
 # Start wasmtime serve
 info "Starting wasmtime serve on port $WASM_PORT..."
@@ -66,9 +70,8 @@ for i in $(seq 1 30); do
     echo " ready"
     ok "Listening on http://127.0.0.1:$WASM_PORT/"
     echo "  Try: curl http://127.0.0.1:$WASM_PORT/db?id=1"
-    echo "  Stop: kill $WASMTIME_PID $SIDECAR_PID"
+    echo "  Stop: Ctrl-C"
     curl -s "http://127.0.0.1:$WASM_PORT/db?id=1" | python3 -m json.tool
-    trap - EXIT
     wait "$WASMTIME_PID"
     exit 0
   fi

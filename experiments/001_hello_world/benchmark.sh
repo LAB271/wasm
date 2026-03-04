@@ -45,7 +45,7 @@ cold_start_ms() {
 # ── Helper: RSS in MB ────────────────────────────────────────────────────────
 rss_mb() {
   local pid=$1
-  ps -o rss= -p "$pid" 2>/dev/null | awk '{printf "%.0f", $1/1024}' || echo "?"
+  ps -o rss= -p "$pid" 2>/dev/null | awk '{printf "%.0f", $1/1024}' || echo "0"
 }
 
 # ── Helper: parse hey output ─────────────────────────────────────────────────
@@ -187,6 +187,8 @@ for i in $(seq 1 50); do
   curl -sf "http://127.0.0.1:5007/query?id=1" &>/dev/null && break
   sleep 0.1
 done
+curl -sf "http://127.0.0.1:5007/query?id=1" &>/dev/null \
+  || fail "Sidecar did not become ready on port 5007"
 
 wasmtime serve -S cli -S inherit-network --addr "127.0.0.1:5006" "$WASM_4C" &
 LEG4C_PID=$!

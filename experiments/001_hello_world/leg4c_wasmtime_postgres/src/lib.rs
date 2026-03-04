@@ -45,7 +45,11 @@ fn handle_db(path: &str, response_out: ResponseOutparam) {
     let pollable = future_resp.subscribe();
     pollable.block();
 
-    let resp_option = future_resp.get().unwrap().unwrap().unwrap();
+    let resp_option = future_resp
+        .get()
+        .expect("future already taken")
+        .expect("request failed")
+        .expect("HTTP error from sidecar");
     let status = resp_option.status();
     let resp_body = resp_option.consume().unwrap();
     let stream = resp_body.stream().unwrap();
@@ -69,7 +73,8 @@ fn handle_db(path: &str, response_out: ResponseOutparam) {
 
     let sidecar_json = String::from_utf8_lossy(&body_bytes);
 
-    // Inject timestamp into the sidecar response
+    // Inject timestamp into the sidecar response.
+    // Assumes sidecar returns flat JSON (no nested objects) so rfind('}') is safe.
     let body_str = if status == 200 {
         if let Some(pos) = sidecar_json.rfind('}') {
             format!("{},\"timestamp\":{ts:.6}}}", &sidecar_json[..pos])
