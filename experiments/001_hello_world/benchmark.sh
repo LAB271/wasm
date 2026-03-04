@@ -141,6 +141,32 @@ kill "$LEG2B_PID" 2>/dev/null; wait "$LEG2B_PID" 2>/dev/null || true
 ok "hey done  rss: ${RSS_2B}MB (node:${RSS_2B_NODE}+chrome:${RSS_2B_CHROME})  p50: $(hey_stat "$HEY_2B" p50)ms  rps: $(hey_stat "$HEY_2B" rps)"
 popd >/dev/null
 
+# ── LEG 2c: Pyodide / Chromium (Playwright) ──────────────────────────────────
+info "Leg 2c: Pyodide / Chromium Playwright (port 5009)"
+pushd "$SCRIPT_DIR/leg2c_pyodide_playwright" >/dev/null
+export PLAYWRIGHT_BROWSERS_PATH=0
+if [ ! -d node_modules ]; then
+  npm install --silent
+  npx playwright install chromium
+fi
+ARTIFACT_2C=$(du -sh node_modules 2>/dev/null | cut -f1)B
+
+node harness.js &
+LEG2C_PID=$!
+PIDS_TO_KILL+=("$LEG2C_PID")
+COLD_2C=$(cold_start_ms 5009)
+ok "cold start: ${COLD_2C}ms  artifact: $ARTIFACT_2C"
+
+HEY_2C=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5009/")
+RSS_2C_NODE=$(rss_mb "$LEG2C_PID")
+RSS_2C_CHROME=$(descendant_pids "$LEG2C_PID" | xargs -I{} ps -o rss= -p {} 2>/dev/null | awk '{s+=$1} END{printf "%.0f", s/1024}')
+RSS_2C_CHROME=${RSS_2C_CHROME:-0}
+RSS_2C=$(( ${RSS_2C_NODE:-0} + RSS_2C_CHROME ))
+kill "$LEG2C_PID" 2>/dev/null; wait "$LEG2C_PID" 2>/dev/null || true
+ok "hey done  rss: ${RSS_2C}MB (node:${RSS_2C_NODE}+chrome:${RSS_2C_CHROME})  p50: $(hey_stat "$HEY_2C" p50)ms  rps: $(hey_stat "$HEY_2C" rps)"
+unset PLAYWRIGHT_BROWSERS_PATH
+popd >/dev/null
+
 # ── LEG 3: Wasmtime ──────────────────────────────────────────────────────────
 info "Leg 3: Wasmtime (port 5003)"
 pushd "$SCRIPT_DIR/leg3_wasmtime" >/dev/null
@@ -267,16 +293,16 @@ ok "Postgres stopped"
 
 # ── Results table ─────────────────────────────────────────────────────────────
 echo ""
-echo "## Results — Hello World (legs 1–3)"
+echo "## Results — Hello World (legs 1–3, incl. 2a/2b/2c variants)"
 echo ""
-printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "Metric" "Leg 1 Flask/Podman" "Leg 2a Pyodide/Node" "Leg 2b Pyodide/Chrome" "Leg 3 Wasmtime"
-printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "---" "---" "---" "---" "---"
-printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "Artifact size"        "$ARTIFACT_1"                  "$ARTIFACT_2A"                  "$ARTIFACT_2B"                  "$ARTIFACT_3"
-printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "Cold start (ms)"      "${COLD_1}"                     "${COLD_2A}"                     "${COLD_2B}"                     "${COLD_3}"
-printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "Memory RSS (MB)"      "${RSS_1}"                      "${RSS_2A}"                      "${RSS_2B}"                      "${RSS_3}"
-printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "hey p50 (ms)"         "$(hey_stat "$HEY_1" p50)"      "$(hey_stat "$HEY_2A" p50)"      "$(hey_stat "$HEY_2B" p50)"      "$(hey_stat "$HEY_3" p50)"
-printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "hey p99 (ms)"         "$(hey_stat "$HEY_1" p99)"      "$(hey_stat "$HEY_2A" p99)"      "$(hey_stat "$HEY_2B" p99)"      "$(hey_stat "$HEY_3" p99)"
-printf "| %-22s | %-20s | %-22s | %-22s | %-16s |\n" "hey req/s"            "$(hey_stat "$HEY_1" rps)"      "$(hey_stat "$HEY_2A" rps)"      "$(hey_stat "$HEY_2B" rps)"      "$(hey_stat "$HEY_3" rps)"
+printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "Metric" "Leg 1 Flask/Podman" "Leg 2a Pyodide/Node" "Leg 2b Pyodide/Chrome" "Leg 2c Pyodide/Playwright" "Leg 3 Wasmtime"
+printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "---" "---" "---" "---" "---" "---"
+printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "Artifact size"        "$ARTIFACT_1"                  "$ARTIFACT_2A"                  "$ARTIFACT_2B"                  "$ARTIFACT_2C"                      "$ARTIFACT_3"
+printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "Cold start (ms)"      "${COLD_1}"                     "${COLD_2A}"                     "${COLD_2B}"                     "${COLD_2C}"                         "${COLD_3}"
+printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "Memory RSS (MB)"      "${RSS_1}"                      "${RSS_2A}"                      "${RSS_2B}"                      "${RSS_2C}"                          "${RSS_3}"
+printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "hey p50 (ms)"         "$(hey_stat "$HEY_1" p50)"      "$(hey_stat "$HEY_2A" p50)"      "$(hey_stat "$HEY_2B" p50)"      "$(hey_stat "$HEY_2C" p50)"          "$(hey_stat "$HEY_3" p50)"
+printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "hey p99 (ms)"         "$(hey_stat "$HEY_1" p99)"      "$(hey_stat "$HEY_2A" p99)"      "$(hey_stat "$HEY_2B" p99)"      "$(hey_stat "$HEY_2C" p99)"          "$(hey_stat "$HEY_3" p99)"
+printf "| %-22s | %-20s | %-22s | %-22s | %-26s | %-16s |\n" "hey req/s"            "$(hey_stat "$HEY_1" rps)"      "$(hey_stat "$HEY_2A" rps)"      "$(hey_stat "$HEY_2B" rps)"      "$(hey_stat "$HEY_2C" rps)"          "$(hey_stat "$HEY_3" rps)"
 echo ""
 
 echo "## Results — Postgres DB query (legs 4a/4b/4c)"

@@ -28,6 +28,7 @@ def handle(request):
 | H4 | **Warm p50**: All three comparable once runtime is loaded; Wasmtime expected fastest raw handler | — |
 | H8 | **Pyodide-in-Chrome vs Node**: Higher cold start and memory than Pyodide-in-Node due to browser overhead | — |
 | H9 | **Warm latency comparable**: Chrome's V8 and Node's V8 run WASM at similar speed; `page.evaluate()` IPC adds overhead | — |
+| H11 | **Playwright vs Puppeteer**: Comparable performance — same browser, different automation driver | — |
 | H5 | **Bridge overhead vs direct**: Negligible — dominated by actual query execution time | — |
 | H6 | **Connection pool location**: Host-side pool is equivalent to in-process pool | — |
 | H7 | **Double-hop latency**: WASM→sidecar→Postgres adds measurable but acceptable overhead vs single-hop | — |
@@ -52,14 +53,14 @@ def handle(request):
 
 ### Hello World (legs 1–3)
 
-| Metric | Leg 1 Flask/Podman | Leg 2a Pyodide/Node | Leg 2b Pyodide/Chrome | Leg 3 Wasmtime |
-|---|---|---|---|---|
-| Artifact size | | | | |
-| Cold start (ms) | | | | |
-| Memory RSS (MB) | | | | |
-| hey p50 (ms) | | | | |
-| hey p99 (ms) | | | | |
-| hey req/s | | | | |
+| Metric | Leg 1 Flask/Podman | Leg 2a Pyodide/Node | Leg 2b Pyodide/Chrome | Leg 2c Pyodide/Playwright | Leg 3 Wasmtime |
+|---|---|---|---|---|---|
+| Artifact size | | | | | |
+| Cold start (ms) | | | | | |
+| Memory RSS (MB) | | | | | |
+| hey p50 (ms) | | | | | |
+| hey p99 (ms) | | | | | |
+| hey req/s | | | | | |
 
 ### Postgres DB query (legs 4a/4b/4c)
 
@@ -81,6 +82,7 @@ def handle(request):
 | 1 | Flask in Podman/Docker container | 5001 | `leg1_flask_docker/run.sh` |
 | 2a | Python via Pyodide in Node.js (no browser) | 5002 | `leg2a_pyodide_node/run.sh` |
 | 2b | Python via Pyodide in headless Chromium (Puppeteer) | 5008 | `leg2b_pyodide_chromium/run.sh` |
+| 2c | Python via Pyodide in headless Chromium (Playwright) | 5009 | `leg2c_pyodide_playwright/run.sh` |
 | 3 | Rust compiled to `wasm32-wasip2`, served via `wasmtime serve` | 5003 | `leg3_wasmtime/run.sh` |
 | 4a | Flask + psycopg2 → Postgres (direct connection) | 5004 | `leg4a_flask_postgres/run.sh` |
 | 4b | Pyodide + Node.js pg bridge → Postgres (host bridge) | 5005 | `leg4b_wasm_postgres_bridge/run.sh` |
