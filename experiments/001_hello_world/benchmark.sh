@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HEY_N=1000
 HEY_C=1
 
+# Ensure Rust/cargo is on PATH (rustup installs to ~/.cargo/bin)
+export PATH="$HOME/.cargo/bin:$PATH"
+
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 ok()   { echo -e "  ${GREEN}✓${NC} $1"; }
 info() { echo -e "  ${YELLOW}→${NC} $1"; }

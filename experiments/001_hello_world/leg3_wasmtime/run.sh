@@ -4,6 +4,9 @@ set -euo pipefail
 PORT=5003
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Ensure Rust/cargo is on PATH (rustup installs to ~/.cargo/bin)
+export PATH="$HOME/.cargo/bin:$PATH"
+
 command -v cargo    &>/dev/null || { echo "✗ cargo not found — install rustup" >&2; exit 1; }
 command -v wasmtime &>/dev/null || { echo "✗ wasmtime not found — brew install wasmtime" >&2; exit 1; }
 
