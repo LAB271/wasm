@@ -14,5 +14,5 @@ source = "app.wasm"
 allowed_outbound_hosts = []
 
 [component.hello-py.build]
-command = "componentize-py -d wit -w proxy componentize app -o app.wasm"
+command = "../.venv/bin/componentize-py -d wit -w proxy componentize app -o app.wasm"
 watch = ["app.py"]

@@ -13,9 +13,15 @@ HEY_C=${HEY_C:-1}
 # Ensure Rust/cargo is on PATH
 export PATH="${CARGO_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/cargo}/bin:$PATH"
 
-command -v hey      &>/dev/null || fail "hey not found — brew install hey"
-command -v spin     &>/dev/null || fail "spin not found — brew install fermyon/tap/spin"
-command -v wasmtime &>/dev/null || fail "wasmtime not found — brew install wasmtime"
+# Activate local venv so componentize-py is available without a global install
+if [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
+  source "$SCRIPT_DIR/.venv/bin/activate"
+fi
+
+command -v hey             &>/dev/null || fail "hey not found — brew install hey"
+command -v spin            &>/dev/null || fail "spin not found — brew install fermyon/tap/spin"
+command -v wasmtime        &>/dev/null || fail "wasmtime not found — brew install wasmtime"
+command -v componentize-py &>/dev/null || fail "componentize-py not found — run: make deps"
 
 CONTAINER_CMD=$(detect_container_cmd)
 
@@ -125,7 +131,6 @@ run_leg1b() {
 run_leg2a() {
   info "Leg 2a: Python/componentize-py + wasmtime serve (port 5032)"
   require_port_free 5032 "Leg 2a"
-  command -v componentize-py &>/dev/null || fail "componentize-py not found — pip install componentize-py"
 
   pushd "$SCRIPT_DIR/python-raw" >/dev/null
     APP_2A=$(human_size app.py)
@@ -154,7 +159,6 @@ run_leg2a() {
 run_leg2b() {
   info "Leg 2b: Python/Spin native macOS (port 5033)"
   require_port_free 5033 "Leg 2b"
-  command -v componentize-py &>/dev/null || fail "componentize-py not found — pip install componentize-py"
 
   pushd "$SCRIPT_DIR/python-spin" >/dev/null
     APP_2B=$(human_size app.py)

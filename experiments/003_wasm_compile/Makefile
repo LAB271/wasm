@@ -1,22 +1,28 @@
 .PHONY: deps build test bench bench-quick clean help
 
 CONTAINER_CMD ?= $(shell command -v podman 2>/dev/null || echo docker)
+VENV          := .venv
+COMPONENTIZE  := $(VENV)/bin/componentize-py
 
-deps:  ## Install toolchain dependencies (spin, componentize-py, hey)
+$(VENV)/bin/activate: requirements.txt
+	python3 -m venv $(VENV)
+	$(VENV)/bin/pip install --quiet -r requirements.txt
+	@touch $(VENV)/bin/activate
+
+deps: $(VENV)/bin/activate  ## Install toolchain dependencies (spin, componentize-py, hey)
 	@echo "→ Installing Spin..."
 	brew install fermyon/tap/spin
-	@echo "→ Installing componentize-py..."
-	pip install componentize-py
 	@echo "→ Installing hey (HTTP load generator)..."
 	brew install hey
 	@echo "→ JS deps..."
 	cd js-spin && npm install
+	@echo "✓ deps ready  (componentize-py in $(VENV))"
 
-build:  ## Compile all sources to .wasm
+build: $(VENV)/bin/activate  ## Compile all sources to .wasm
 	@echo "→ Building JS (Spin)..."
 	cd js-spin && npm install --silent && spin build
 	@echo "→ Building Python/raw (componentize-py)..."
-	cd python-raw && componentize-py -d wit -w proxy componentize app -o hello-py-raw.wasm
+	cd python-raw && ../$(COMPONENTIZE) -d wit -w proxy componentize app -o hello-py-raw.wasm
 	@echo "→ Building Python (Spin)..."
 	cd python-spin && spin build
 	@echo "→ Building Rust baseline..."
@@ -33,6 +39,7 @@ bench-quick:  ## Quick benchmark (10 requests)
 	HEY_N=10 ./benchmark.sh
 
 clean:  ## Remove build artifacts
+	rm -rf $(VENV)
 	rm -rf js-spin/node_modules js-spin/target
 	rm -f python-spin/app.wasm
 	rm -f python-raw/hello-py-raw.wasm
