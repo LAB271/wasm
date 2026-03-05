@@ -1,0 +1,21 @@
+{
+  "name": "experiment-002-chromium-sandbox",
+  "version": "1.0.0",
+  "description": "Chromium WASM sandbox workload & isolation characterization",
+  "main": "harness.js",
+  "scripts": {
+    "start": "node harness.js",
+    "leg1a": "node harness.js 1a",
+    "leg1b": "node harness.js 1b",
+    "leg2a": "node harness.js 2a",
+    "leg2b": "node harness.js 2b",
+    "leg3a": "node harness.js 3a",
+    "leg3b": "node harness.js 3b",
+    "leg4a": "node harness.js 4a",
+    "leg4b": "node harness.js 4b"
+  },
+  "dependencies": {
+    "pg": "^8.13.0",
+    "playwright": "^1.50.0"
+  }
+}
