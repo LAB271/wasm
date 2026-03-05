@@ -250,7 +250,7 @@ print_results() {
   printf "| %-22s | %-24s | %-24s |\n" "Cold start (ms)"   "${COLD_1A:-n/a}" "${COLD_1B:-n/a}"
   printf "| %-22s | %-24s | %-24s |\n" "Memory RSS (MB)"   "${RSS_1A:-n/a}"  "${RSS_1B:-n/a}"
   printf "| %-22s | %-24s | %-24s |\n" "hey p50 (ms)" "$(hey_stat "${HEY_1A:-}" p50)" "$(hey_stat "${HEY_1B:-}" p50)"
-  printf "| %-22s | %-24s | %-24s |\n" "hey p99 (ms)" "$(hey_stat "${HEY_1A:-}" p99)" "$(hey_stat "${HEY_1B:-}" p99)"
+  printf "| %-22s | %-24s | %-24s |\n" "hey p95 (ms)" "$(hey_stat "${HEY_1A:-}" p95)" "$(hey_stat "${HEY_1B:-}" p95)"
   printf "| %-22s | %-24s | %-24s |\n" "hey req/s"    "$(hey_stat "${HEY_1A:-}" rps)" "$(hey_stat "${HEY_1B:-}" rps)"
   echo ""
 
@@ -261,7 +261,7 @@ print_results() {
   printf "| %-22s | %-24s | %-28s |\n" "Cold start (ms)"   "${COLD_2A:-n/a}" "${COLD_2B:-n/a}"
   printf "| %-22s | %-24s | %-28s |\n" "Memory RSS (MB)"   "${RSS_2A:-n/a}"  "${RSS_2B:-n/a}"
   printf "| %-22s | %-24s | %-28s |\n" "hey p50 (ms)" "$(hey_stat "${HEY_2A:-}" p50)" "$(hey_stat "${HEY_2B:-}" p50)"
-  printf "| %-22s | %-24s | %-28s |\n" "hey p99 (ms)" "$(hey_stat "${HEY_2A:-}" p99)" "$(hey_stat "${HEY_2B:-}" p99)"
+  printf "| %-22s | %-24s | %-28s |\n" "hey p95 (ms)" "$(hey_stat "${HEY_2A:-}" p95)" "$(hey_stat "${HEY_2B:-}" p95)"
   printf "| %-22s | %-24s | %-28s |\n" "hey req/s"    "$(hey_stat "${HEY_2A:-}" rps)" "$(hey_stat "${HEY_2B:-}" rps)"
   echo ""
 
@@ -272,7 +272,7 @@ print_results() {
   printf "| %-22s | %-24s | %-28s |\n" "Cold start (ms)"   "${COLD_3A:-n/a}" "${COLD_3B:-n/a}"
   printf "| %-22s | %-24s | %-28s |\n" "Memory RSS (MB)"   "${RSS_3A:-n/a}"  "${RSS_3B:-n/a}"
   printf "| %-22s | %-24s | %-28s |\n" "hey p50 (ms)" "$(hey_stat "${HEY_3A:-}" p50)" "$(hey_stat "${HEY_3B:-}" p50)"
-  printf "| %-22s | %-24s | %-28s |\n" "hey p99 (ms)" "$(hey_stat "${HEY_3A:-}" p99)" "$(hey_stat "${HEY_3B:-}" p99)"
+  printf "| %-22s | %-24s | %-28s |\n" "hey p95 (ms)" "$(hey_stat "${HEY_3A:-}" p95)" "$(hey_stat "${HEY_3B:-}" p95)"
   printf "| %-22s | %-24s | %-28s |\n" "hey req/s"    "$(hey_stat "${HEY_3A:-}" rps)" "$(hey_stat "${HEY_3B:-}" rps)"
   echo ""
 
@@ -283,7 +283,7 @@ print_results() {
   printf "| %-22s | %-24s | %-28s |\n" "Cold start (ms)"   "${COLD_4A:-n/a}" "${COLD_4B:-n/a}"
   printf "| %-22s | %-24s | %-28s |\n" "Memory RSS (MB)"   "${RSS_4A:-n/a}"  "${RSS_4B:-n/a}"
   printf "| %-22s | %-24s | %-28s |\n" "hey p50 (ms)" "$(hey_stat "${HEY_4A:-}" p50)" "$(hey_stat "${HEY_4B:-}" p50)"
-  printf "| %-22s | %-24s | %-28s |\n" "hey p99 (ms)" "$(hey_stat "${HEY_4A:-}" p99)" "$(hey_stat "${HEY_4B:-}" p99)"
+  printf "| %-22s | %-24s | %-28s |\n" "hey p95 (ms)" "$(hey_stat "${HEY_4A:-}" p95)" "$(hey_stat "${HEY_4B:-}" p95)"
   printf "| %-22s | %-24s | %-28s |\n" "hey req/s"    "$(hey_stat "${HEY_4A:-}" rps)" "$(hey_stat "${HEY_4B:-}" rps)"
   echo ""
 }
