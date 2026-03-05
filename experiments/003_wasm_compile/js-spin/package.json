@@ -1,0 +1,12 @@
+{
+  "name": "hello-js",
+  "version": "0.1.0",
+  "description": "Hello World JSON API — JS compiled to WASM via Spin",
+  "type": "module",
+  "scripts": {
+    "build": "npx @fermyon/spin-js-sdk build"
+  },
+  "devDependencies": {
+    "@fermyon/spin-js-sdk": "^3.0.1"
+  }
+}

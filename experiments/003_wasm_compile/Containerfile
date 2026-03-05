@@ -1,0 +1,36 @@
+# Spin-in-podman: run a pre-built Spin WASM component inside an OCI container.
+#
+# Build args:
+#   APP_DIR   — directory containing spin.toml  (default: js-spin)
+#   WASM_SRC  — path to compiled .wasm relative to APP_DIR  (default: target/hello-js.wasm)
+#   WASM_DST  — destination path inside the image             (default: target/hello-js.wasm)
+#
+# Usage:
+#   # JS
+#   podman build -t hello-js-spin \
+#     --build-arg APP_DIR=js-spin \
+#     --build-arg WASM_SRC=target/hello-js.wasm \
+#     --build-arg WASM_DST=target/hello-js.wasm .
+#   podman run --rm -p 5031:3000 hello-js-spin
+#
+#   # Python
+#   podman build -t hello-py-spin \
+#     --build-arg APP_DIR=python-spin \
+#     --build-arg WASM_SRC=app.wasm \
+#     --build-arg WASM_DST=app.wasm .
+#   podman run --rm -p 5034:3000 hello-py-spin
+
+FROM ghcr.io/fermyon/spin:latest
+
+ARG APP_DIR=js-spin
+ARG WASM_SRC=target/hello-js.wasm
+ARG WASM_DST=target/hello-js.wasm
+
+WORKDIR /app
+
+COPY ${APP_DIR}/spin.toml .
+COPY ${APP_DIR}/${WASM_SRC} ./${WASM_DST}
+
+EXPOSE 3000
+
+ENTRYPOINT ["spin", "up", "--listen", "0.0.0.0:3000"]

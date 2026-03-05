@@ -1,0 +1,10 @@
+build/
+node_modules/
+js-spin/node_modules/
+js-spin/target/
+python-spin/app.wasm
+python-raw/hello-py-raw.wasm
+rust/target/
+__pycache__/
+*.py[cod]
+.venv/

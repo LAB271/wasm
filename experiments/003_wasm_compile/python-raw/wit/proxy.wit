@@ -1,0 +1,8 @@
+// Entry-point world for componentize-py raw Python → WASM compilation.
+// References the standard wasi:http/proxy world; componentize-py resolves
+// the wasi:http WIT from its bundled package.
+package example:hello@0.1.0;
+
+world proxy {
+  export wasi:http/incoming-handler@0.2.0;
+}
