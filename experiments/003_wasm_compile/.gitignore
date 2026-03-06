@@ -13,6 +13,7 @@ python-raw/componentize_py_async_support/
 python-raw/poll_loop.py
 python-raw/componentize_py_runtime.pyi
 rust/target/
+.spin/
 __pycache__/
 *.py[cod]
 .venv/
