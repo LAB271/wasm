@@ -1,1 +1,2 @@
-componentize-py
+spin-sdk==3.4.1
+componentize-py==0.17.2

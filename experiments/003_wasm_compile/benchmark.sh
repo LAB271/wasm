@@ -13,9 +13,10 @@ HEY_C=${HEY_C:-1}
 # Ensure Rust/cargo is on PATH
 export PATH="${CARGO_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/cargo}/bin:$PATH"
 
-# Activate local venv so componentize-py is available without a global install
-if [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
-  source "$SCRIPT_DIR/.venv/bin/activate"
+# Activate project-root venv (git root) so componentize-py is available
+VENV_DIR="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)/.venv"
+if [ -f "$VENV_DIR/bin/activate" ]; then
+  source "$VENV_DIR/bin/activate"
 fi
 
 command -v hey             &>/dev/null || fail "hey not found — brew install hey"

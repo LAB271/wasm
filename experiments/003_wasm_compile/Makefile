@@ -1,12 +1,14 @@
 .PHONY: deps build test bench bench-quick clean help
 
 CONTAINER_CMD ?= $(shell command -v podman 2>/dev/null || echo docker)
-VENV          := .venv
-COMPONENTIZE  := $(VENV)/bin/componentize-py
+# .venv lives at the project root (git root)
+GIT_ROOT      := $(shell git rev-parse --show-toplevel)
+VENV          := $(GIT_ROOT)/.venv
+ACTIVATE      := . $(VENV)/bin/activate &&
 
 $(VENV)/bin/activate: requirements.txt
-	python3 -m venv $(VENV)
-	$(VENV)/bin/pip install --quiet -r requirements.txt
+	uv venv $(VENV)
+	uv pip install --quiet -r requirements.txt
 	@touch $(VENV)/bin/activate
 
 deps: $(VENV)/bin/activate  ## Install toolchain dependencies (spin, componentize-py, hey)
@@ -20,9 +22,9 @@ build: $(VENV)/bin/activate  ## Compile all sources to .wasm
 	@echo "→ Building JS (Spin)..."
 	cd js-spin && spin build
 	@echo "→ Building Python/raw (componentize-py)..."
-	cd python-raw && ../$(COMPONENTIZE) -d wit -w proxy componentize app -o hello-py-raw.wasm
+	cd python-raw && $(ACTIVATE) componentize-py -d wit -w proxy componentize app -o hello-py-raw.wasm
 	@echo "→ Building Python (Spin)..."
-	cd python-spin && spin build
+	cd python-spin && $(ACTIVATE) spin build
 	@echo "→ Building Rust baseline..."
 	cd rust && cargo build --target wasm32-wasip2 --release --quiet
 	@echo "✓ All .wasm artifacts built"

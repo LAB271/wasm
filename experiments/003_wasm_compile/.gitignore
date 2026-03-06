@@ -1,6 +1,7 @@
 build/
 node_modules/
 js-spin-scaffold/
+py-spin-scaffold/
 js-spin/node_modules/
 js-spin/build/
 js-spin/dist/
