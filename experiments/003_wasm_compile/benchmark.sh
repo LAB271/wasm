@@ -279,38 +279,42 @@ run_leg4() {
 # Results table
 # ══════════════════════════════════════════════════════════════════════════════
 print_results() {
+  local fmt="| %-22s | %-8s | %-10s | %-10s | %-18s | %-10s | %-10s | %-10s | %-10s | %-8s |\n"
   echo ""
   echo "## Results — Experiment 003: JS, Python & AS → .wasm"
   echo ""
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "Metric" \
-    "1a JS/Spin native" \
-    "1b JS/Spin podman" \
-    "2a Py/raw wasmtime" \
-    "2b Py/Spin native" \
-    "2c Py/Spin podman" \
-    "3 Rust baseline" \
-    "4 AS/wasmtime"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "---" "---" "---" "---" "---" "---" "---" "---"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "Source size"       "${APP_1A:-n/a}"    "${APP_1B:-n/a}"    "${APP_2A:-n/a}"      "${APP_2B:-n/a}"    "${APP_2C:-n/a}"    "${APP_3:-n/a}"    "${APP_4:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "Artifact (.wasm)"  "${ARTIFACT_1A:-n/a}" "${ARTIFACT_1B:-n/a}" "${ARTIFACT_2A:-n/a}" "${ARTIFACT_2B:-n/a}" "${ARTIFACT_2C:-n/a}" "${ARTIFACT_3:-n/a}" "${ARTIFACT_4:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "Build time (ms)"   "${BUILD_1A:-n/a}"  "-"                 "${BUILD_2A:-n/a}"    "${BUILD_2B:-n/a}"  "-"                 "${BUILD_3:-n/a}"  "${BUILD_4:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "Runtime/image"     "${RUNTIME_1A:-n/a}" "${RUNTIME_1B:-n/a}" "${RUNTIME_2A:-n/a}" "${RUNTIME_2B:-n/a}" "${RUNTIME_2C:-n/a}" "${RUNTIME_3:-n/a}" "${RUNTIME_4:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "Cold start (ms)"   "${COLD_1A:-n/a}"   "${COLD_1B:-n/a}"   "${COLD_2A:-n/a}"     "${COLD_2B:-n/a}"   "${COLD_2C:-n/a}"   "${COLD_3:-n/a}"   "${COLD_4:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "Memory RSS (MB)"   "${RSS_1A:-n/a}"    "${RSS_1B:-n/a}"    "${RSS_2A:-n/a}"      "${RSS_2B:-n/a}"    "${RSS_2C:-n/a}"    "${RSS_3:-n/a}"    "${RSS_4:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "hey p50 (ms)"      "$(hey_stat "${HEY_1A:-}" p50)"  "$(hey_stat "${HEY_1B:-}" p50)"  "$(hey_stat "${HEY_2A:-}" p50)"  "$(hey_stat "${HEY_2B:-}" p50)"  "$(hey_stat "${HEY_2C:-}" p50)"  "$(hey_stat "${HEY_3:-}" p50)"  "$(hey_stat "${HEY_4:-}" p50)"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "hey p95 (ms)"      "$(hey_stat "${HEY_1A:-}" p95)"  "$(hey_stat "${HEY_1B:-}" p95)"  "$(hey_stat "${HEY_2A:-}" p95)"  "$(hey_stat "${HEY_2B:-}" p95)"  "$(hey_stat "${HEY_2C:-}" p95)"  "$(hey_stat "${HEY_3:-}" p95)"  "$(hey_stat "${HEY_4:-}" p95)"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
-    "hey req/s"         "$(hey_stat "${HEY_1A:-}" rps)"  "$(hey_stat "${HEY_1B:-}" rps)"  "$(hey_stat "${HEY_2A:-}" rps)"  "$(hey_stat "${HEY_2B:-}" rps)"  "$(hey_stat "${HEY_2C:-}" rps)"  "$(hey_stat "${HEY_3:-}" rps)"  "$(hey_stat "${HEY_4:-}" rps)"
+  printf "$fmt" \
+    "Leg" "Source" "Artifact" "Build(ms)" "Runtime" "Cold(ms)" "RSS(MB)" "p50(ms)" "p95(ms)" "req/s"
+  printf "$fmt" \
+    "---" "---" "---" "---" "---" "---" "---" "---" "---" "---"
+  printf "$fmt" "1a JS/Spin native" \
+    "${APP_1A:-n/a}" "${ARTIFACT_1A:-n/a}" "${BUILD_1A:-n/a}" "${RUNTIME_1A:-n/a}" \
+    "${COLD_1A:-n/a}" "${RSS_1A:-n/a}" \
+    "$(hey_stat "${HEY_1A:-}" p50)" "$(hey_stat "${HEY_1A:-}" p95)" "$(hey_stat "${HEY_1A:-}" rps)"
+  printf "$fmt" "1b JS/Spin podman" \
+    "${APP_1B:-n/a}" "${ARTIFACT_1B:-n/a}" "-" "${RUNTIME_1B:-n/a}" \
+    "${COLD_1B:-n/a}" "${RSS_1B:-n/a}" \
+    "$(hey_stat "${HEY_1B:-}" p50)" "$(hey_stat "${HEY_1B:-}" p95)" "$(hey_stat "${HEY_1B:-}" rps)"
+  printf "$fmt" "2a Py/raw wasmtime" \
+    "${APP_2A:-n/a}" "${ARTIFACT_2A:-n/a}" "${BUILD_2A:-n/a}" "${RUNTIME_2A:-n/a}" \
+    "${COLD_2A:-n/a}" "${RSS_2A:-n/a}" \
+    "$(hey_stat "${HEY_2A:-}" p50)" "$(hey_stat "${HEY_2A:-}" p95)" "$(hey_stat "${HEY_2A:-}" rps)"
+  printf "$fmt" "2b Py/Spin native" \
+    "${APP_2B:-n/a}" "${ARTIFACT_2B:-n/a}" "${BUILD_2B:-n/a}" "${RUNTIME_2B:-n/a}" \
+    "${COLD_2B:-n/a}" "${RSS_2B:-n/a}" \
+    "$(hey_stat "${HEY_2B:-}" p50)" "$(hey_stat "${HEY_2B:-}" p95)" "$(hey_stat "${HEY_2B:-}" rps)"
+  printf "$fmt" "2c Py/Spin podman" \
+    "${APP_2C:-n/a}" "${ARTIFACT_2C:-n/a}" "-" "${RUNTIME_2C:-n/a}" \
+    "${COLD_2C:-n/a}" "${RSS_2C:-n/a}" \
+    "$(hey_stat "${HEY_2C:-}" p50)" "$(hey_stat "${HEY_2C:-}" p95)" "$(hey_stat "${HEY_2C:-}" rps)"
+  printf "$fmt" "3 Rust baseline" \
+    "${APP_3:-n/a}" "${ARTIFACT_3:-n/a}" "${BUILD_3:-n/a}" "${RUNTIME_3:-n/a}" \
+    "${COLD_3:-n/a}" "${RSS_3:-n/a}" \
+    "$(hey_stat "${HEY_3:-}" p50)" "$(hey_stat "${HEY_3:-}" p95)" "$(hey_stat "${HEY_3:-}" rps)"
+  printf "$fmt" "4 AS/wasmtime" \
+    "${APP_4:-n/a}" "${ARTIFACT_4:-n/a}" "${BUILD_4:-n/a}" "${RUNTIME_4:-n/a}" \
+    "${COLD_4:-n/a}" "${RSS_4:-n/a}" \
+    "$(hey_stat "${HEY_4:-}" p50)" "$(hey_stat "${HEY_4:-}" p95)" "$(hey_stat "${HEY_4:-}" rps)"
   echo ""
 
   echo "### Hypothesis outcomes"
