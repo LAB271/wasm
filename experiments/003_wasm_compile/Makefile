@@ -22,7 +22,7 @@ build: $(VENV)/bin/activate  ## Compile all sources to .wasm
 	@echo "→ Building JS (Spin)..."
 	cd js-spin && spin build
 	@echo "→ Building Python/raw (componentize-py)..."
-	cd python-raw && $(ACTIVATE) componentize-py -d wit -w proxy componentize app -o hello-py-raw.wasm
+	cd python-raw && $(ACTIVATE) componentize-py --all-features -d wit -w proxy componentize app -o hello-py-raw.wasm
 	@echo "→ Building Python (Spin)..."
 	cd python-spin && $(ACTIVATE) spin build
 	@echo "→ Building Rust baseline..."
