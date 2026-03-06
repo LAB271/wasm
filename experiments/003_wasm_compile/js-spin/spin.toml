@@ -1,0 +1,19 @@
+spin_manifest_version = 2
+
+[application]
+name = "hello-js"
+version = "0.1.0"
+description = "Hello World JSON API in JavaScript (compiled to WASM)"
+
+[[trigger.http]]
+route = "/..."
+component = "hello-js"
+
+[component.hello-js]
+source = "dist/hello-js.wasm"
+exclude_files = ["**/node_modules"]
+allowed_outbound_hosts = []
+
+[component.hello-js.build]
+command = ["npm install", "npm run build"]
+watch = ["src/**/*.js"]

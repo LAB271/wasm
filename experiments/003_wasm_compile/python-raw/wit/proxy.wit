@@ -1,0 +1,7 @@
+// Use the standard wasi:http/proxy world defined in deps/http.wit.
+// This re-exports it as our top-level world so componentize-py can find it.
+package example:hello@0.1.0;
+
+world proxy {
+  include wasi:http/proxy@0.2.9;
+}
