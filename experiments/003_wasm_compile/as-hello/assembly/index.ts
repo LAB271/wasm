@@ -110,12 +110,12 @@ declare function outgoing_response_drop(handle: u32): void;
 // ── Initialization: write static strings into memory ────────────────────────
 
 function initStaticData(): void {
-  // "content-type"
+  // "content-type" as raw bytes (canonical ABI needs flat memory, not AS GC strings)
   const ct: StaticArray<u8> = [0x63,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x74,0x79,0x70,0x65];
   for (let i: u32 = 0; i < 12; i++) {
     store<u8>(CT_NAME_PTR + i, unchecked(ct[i]));
   }
-  // "application/json"
+  // "application/json" as raw bytes
   const av: StaticArray<u8> = [0x61,0x70,0x70,0x6c,0x69,0x63,0x61,0x74,0x69,0x6f,0x6e,0x2f,0x6a,0x73,0x6f,0x6e];
   for (let i: u32 = 0; i < 16; i++) {
     store<u8>(CT_VALUE_PTR + i, unchecked(av[i]));
@@ -170,12 +170,13 @@ function buildJson(seconds: u64): u32 {
 
 // ── cabi_realloc — required by component model ──────────────────────────────
 
+// Bump allocator for component model. Safe because wasmtime serve creates a
+// fresh module instance per request — bump_ptr never needs to reset.
 let bump_ptr: u32 = DATA_BASE + 1024;
 
 export function cabi_realloc(
   old_ptr: u32, old_size: u32, align: u32, new_size: u32
 ): u32 {
-  // Simple bump allocator — sufficient for short-lived request handling
   const aligned = (bump_ptr + align - 1) & ~(align - 1);
   bump_ptr = aligned + new_size;
   return aligned;
@@ -200,8 +201,9 @@ export function handle(request: u32, response_out: u32): void {
   const headers = fields_new();
   fields_append(headers, CT_NAME_PTR, CT_NAME_LEN, CT_VALUE_PTR, CT_VALUE_LEN, RET_AREA);
 
-  // Create outgoing response with headers
+  // Create outgoing response — constructor takes ownership of headers handle
   const response = outgoing_response_new(headers);
+  // Note: do NOT call fields_drop(headers) — ownership transferred to response
   outgoing_response_set_status(response, 200);
 
   // Get outgoing body

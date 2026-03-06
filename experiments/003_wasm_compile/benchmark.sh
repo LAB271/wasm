@@ -253,11 +253,10 @@ run_leg3() {
 run_leg4() {
   info "Leg 4: AssemblyScript/wasmtime serve (port 5036)"
   require_port_free 5036 "Leg 4"
-  command -v wasm-tools &>/dev/null || fail "wasm-tools not found — cargo install wasm-tools"
 
   pushd "$SCRIPT_DIR/as-hello" >/dev/null
     APP_4=$(human_size assembly/index.ts)
-    npm ci --silent 2>/dev/null || npm install --silent
+    npm ci --silent || npm install --silent
     BUILD_4=$(timed_build "asc + wasm-tools" ./build.sh)
     ARTIFACT_4=$(human_size build/hello-as.wasm)
     RUNTIME_4="wasmtime $(wasmtime --version | awk '{print $2}')"

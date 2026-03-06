@@ -19,7 +19,7 @@ pushd "$SCRIPT_DIR" >/dev/null
 npx asc assembly/index.ts \
   --outFile build/hello-as-core.wasm \
   --optimize --exportRuntime --lowMemoryLimit \
-  --use abort=assembly/index/abort 2>/dev/null
+  --use abort=assembly/index/abort
 popd >/dev/null
 
 # Step 2: Rename 'handle' export to canonical ABI name
