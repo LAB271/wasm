@@ -24,7 +24,7 @@ build: $(VENV)/bin/activate  ## Compile all sources to .wasm
 	@echo "→ Building Python (Spin)..."
 	cd python-spin && spin build
 	@echo "→ Building Rust baseline..."
-	cd rust && cargo build --target wasm32-wasip2 --release --quiet
+	cd rust-hello && cargo build --target wasm32-wasip2 --release --quiet
 	@echo "→ Building AssemblyScript (asc + wasm-tools)..."
 	cd as-hello && npm ci --silent 2>/dev/null && ./build.sh
 	@echo "✓ All .wasm artifacts built"
@@ -43,7 +43,7 @@ clean:  ## Remove build artifacts
 	rm -rf js-spin/node_modules js-spin/build js-spin/dist
 	rm -f python-spin/app.wasm
 	rm -f python-raw/hello-py-raw.wasm
-	rm -rf rust/target
+	rm -rf rust-hello/target
 	rm -rf as-hello/node_modules as-hello/build
 	$(CONTAINER_CMD) rmi -f hello-js-spin hello-py-spin 2>/dev/null || true
 
