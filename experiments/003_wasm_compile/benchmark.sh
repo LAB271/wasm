@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Experiment 003 — JS & Python to .wasm benchmark
+# Experiment 003 — JS, Python, AS to .wasm benchmark
 # Legs: 1a (JS/Spin native), 1b (JS/Spin podman), 2a (Python/raw wasmtime),
-#       2b (Python/Spin native), 2c (Python/Spin podman), 3 (Rust baseline)
+#       2b (Python/Spin native), 2c (Python/Spin podman), 3 (Rust baseline),
+#       4 (AssemblyScript/wasmtime)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,6 +23,7 @@ command -v hey             &>/dev/null || fail "hey not found — brew install h
 command -v spin            &>/dev/null || fail "spin not found — brew install fermyon/tap/spin"
 command -v wasmtime        &>/dev/null || fail "wasmtime not found — brew install wasmtime"
 command -v componentize-py &>/dev/null || fail "componentize-py not found — run: make deps"
+command -v wasm-tools      &>/dev/null || fail "wasm-tools not found — cargo install wasm-tools"
 
 CONTAINER_CMD=$(detect_container_cmd)
 
@@ -246,40 +248,70 @@ run_leg3() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# LEG 4: AssemblyScript → asc + wasm-tools → wasmtime serve (native macOS)
+# ══════════════════════════════════════════════════════════════════════════════
+run_leg4() {
+  info "Leg 4: AssemblyScript/wasmtime serve (port 5036)"
+  require_port_free 5036 "Leg 4"
+  command -v wasm-tools &>/dev/null || fail "wasm-tools not found — cargo install wasm-tools"
+
+  pushd "$SCRIPT_DIR/as-hello" >/dev/null
+    APP_4=$(human_size assembly/index.ts)
+    npm ci --silent 2>/dev/null || npm install --silent
+    BUILD_4=$(timed_build "asc + wasm-tools" ./build.sh)
+    ARTIFACT_4=$(human_size build/hello-as.wasm)
+    RUNTIME_4="wasmtime $(wasmtime --version | awk '{print $2}')"
+
+    wasmtime serve -S cli build/hello-as.wasm --addr "127.0.0.1:5036" &>/dev/null &
+    WM_4_PID=$!
+    PIDS_TO_KILL+=("$WM_4_PID")
+    COLD_4=$(cold_start_ms 5036)
+    ok "cold start: ${COLD_4}ms  app: $APP_4  artifact: $ARTIFACT_4  build: ${BUILD_4}ms"
+
+    HEY_4=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5036/")
+    RSS_4=$(rss_mb "$WM_4_PID")
+    kill_and_wait "$WM_4_PID"
+    PIDS_TO_KILL=("${PIDS_TO_KILL[@]/$WM_4_PID}")
+    ok "hey done  rss: ${RSS_4}MB  p50: $(hey_stat "$HEY_4" p50)ms  p95: $(hey_stat "$HEY_4" p95)ms  rps: $(hey_stat "$HEY_4" rps)"
+  popd >/dev/null
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Results table
 # ══════════════════════════════════════════════════════════════════════════════
 print_results() {
   echo ""
-  echo "## Results — Experiment 003: JS & Python → .wasm"
+  echo "## Results — Experiment 003: JS, Python & AS → .wasm"
   echo ""
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
     "Metric" \
     "1a JS/Spin native" \
     "1b JS/Spin podman" \
     "2a Py/raw wasmtime" \
     "2b Py/Spin native" \
     "2c Py/Spin podman" \
-    "3 Rust baseline"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "---" "---" "---" "---" "---" "---" "---"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "Source size"       "${APP_1A:-n/a}"    "${APP_1B:-n/a}"    "${APP_2A:-n/a}"      "${APP_2B:-n/a}"    "${APP_2C:-n/a}"    "${APP_3:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "Artifact (.wasm)"  "${ARTIFACT_1A:-n/a}" "${ARTIFACT_1B:-n/a}" "${ARTIFACT_2A:-n/a}" "${ARTIFACT_2B:-n/a}" "${ARTIFACT_2C:-n/a}" "${ARTIFACT_3:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "Build time (ms)"   "${BUILD_1A:-n/a}"  "-"                 "${BUILD_2A:-n/a}"    "${BUILD_2B:-n/a}"  "-"                 "${BUILD_3:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "Runtime/image"     "${RUNTIME_1A:-n/a}" "${RUNTIME_1B:-n/a}" "${RUNTIME_2A:-n/a}" "${RUNTIME_2B:-n/a}" "${RUNTIME_2C:-n/a}" "${RUNTIME_3:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "Cold start (ms)"   "${COLD_1A:-n/a}"   "${COLD_1B:-n/a}"   "${COLD_2A:-n/a}"     "${COLD_2B:-n/a}"   "${COLD_2C:-n/a}"   "${COLD_3:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "Memory RSS (MB)"   "${RSS_1A:-n/a}"    "${RSS_1B:-n/a}"    "${RSS_2A:-n/a}"      "${RSS_2B:-n/a}"    "${RSS_2C:-n/a}"    "${RSS_3:-n/a}"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "hey p50 (ms)"      "$(hey_stat "${HEY_1A:-}" p50)"  "$(hey_stat "${HEY_1B:-}" p50)"  "$(hey_stat "${HEY_2A:-}" p50)"  "$(hey_stat "${HEY_2B:-}" p50)"  "$(hey_stat "${HEY_2C:-}" p50)"  "$(hey_stat "${HEY_3:-}" p50)"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "hey p95 (ms)"      "$(hey_stat "${HEY_1A:-}" p95)"  "$(hey_stat "${HEY_1B:-}" p95)"  "$(hey_stat "${HEY_2A:-}" p95)"  "$(hey_stat "${HEY_2B:-}" p95)"  "$(hey_stat "${HEY_2C:-}" p95)"  "$(hey_stat "${HEY_3:-}" p95)"
-  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s |\n" \
-    "hey req/s"         "$(hey_stat "${HEY_1A:-}" rps)"  "$(hey_stat "${HEY_1B:-}" rps)"  "$(hey_stat "${HEY_2A:-}" rps)"  "$(hey_stat "${HEY_2B:-}" rps)"  "$(hey_stat "${HEY_2C:-}" rps)"  "$(hey_stat "${HEY_3:-}" rps)"
+    "3 Rust baseline" \
+    "4 AS/wasmtime"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "---" "---" "---" "---" "---" "---" "---" "---"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "Source size"       "${APP_1A:-n/a}"    "${APP_1B:-n/a}"    "${APP_2A:-n/a}"      "${APP_2B:-n/a}"    "${APP_2C:-n/a}"    "${APP_3:-n/a}"    "${APP_4:-n/a}"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "Artifact (.wasm)"  "${ARTIFACT_1A:-n/a}" "${ARTIFACT_1B:-n/a}" "${ARTIFACT_2A:-n/a}" "${ARTIFACT_2B:-n/a}" "${ARTIFACT_2C:-n/a}" "${ARTIFACT_3:-n/a}" "${ARTIFACT_4:-n/a}"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "Build time (ms)"   "${BUILD_1A:-n/a}"  "-"                 "${BUILD_2A:-n/a}"    "${BUILD_2B:-n/a}"  "-"                 "${BUILD_3:-n/a}"  "${BUILD_4:-n/a}"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "Runtime/image"     "${RUNTIME_1A:-n/a}" "${RUNTIME_1B:-n/a}" "${RUNTIME_2A:-n/a}" "${RUNTIME_2B:-n/a}" "${RUNTIME_2C:-n/a}" "${RUNTIME_3:-n/a}" "${RUNTIME_4:-n/a}"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "Cold start (ms)"   "${COLD_1A:-n/a}"   "${COLD_1B:-n/a}"   "${COLD_2A:-n/a}"     "${COLD_2B:-n/a}"   "${COLD_2C:-n/a}"   "${COLD_3:-n/a}"   "${COLD_4:-n/a}"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "Memory RSS (MB)"   "${RSS_1A:-n/a}"    "${RSS_1B:-n/a}"    "${RSS_2A:-n/a}"      "${RSS_2B:-n/a}"    "${RSS_2C:-n/a}"    "${RSS_3:-n/a}"    "${RSS_4:-n/a}"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "hey p50 (ms)"      "$(hey_stat "${HEY_1A:-}" p50)"  "$(hey_stat "${HEY_1B:-}" p50)"  "$(hey_stat "${HEY_2A:-}" p50)"  "$(hey_stat "${HEY_2B:-}" p50)"  "$(hey_stat "${HEY_2C:-}" p50)"  "$(hey_stat "${HEY_3:-}" p50)"  "$(hey_stat "${HEY_4:-}" p50)"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "hey p95 (ms)"      "$(hey_stat "${HEY_1A:-}" p95)"  "$(hey_stat "${HEY_1B:-}" p95)"  "$(hey_stat "${HEY_2A:-}" p95)"  "$(hey_stat "${HEY_2B:-}" p95)"  "$(hey_stat "${HEY_2C:-}" p95)"  "$(hey_stat "${HEY_3:-}" p95)"  "$(hey_stat "${HEY_4:-}" p95)"
+  printf "| %-22s | %-20s | %-20s | %-24s | %-20s | %-20s | %-18s | %-18s |\n" \
+    "hey req/s"         "$(hey_stat "${HEY_1A:-}" rps)"  "$(hey_stat "${HEY_1B:-}" rps)"  "$(hey_stat "${HEY_2A:-}" rps)"  "$(hey_stat "${HEY_2B:-}" rps)"  "$(hey_stat "${HEY_2C:-}" rps)"  "$(hey_stat "${HEY_3:-}" rps)"  "$(hey_stat "${HEY_4:-}" rps)"
   echo ""
 
   echo "### Hypothesis outcomes"
@@ -298,6 +330,8 @@ print_results() {
   local art_3="n/a"; [ -n "${ARTIFACT_3:-}" ] && art_3="${ARTIFACT_3}"
   echo "| H5 | Rust .wasm smallest + fastest cold start | 3 | artifact: $art_3  cold: ${COLD_3:-n/a}ms |"
   echo "| H6 | Spin Python uses componentize-py (.wasm same size as 2a) | 2a vs 2b | 2a: $py_raw_mb  2b: ${ARTIFACT_2B:-n/a} |"
+  local art_4="n/a"; [ -n "${ARTIFACT_4:-}" ] && art_4="${ARTIFACT_4}"
+  echo "| H7 | AssemblyScript .wasm ~10-50KB (no runtime, like Rust) | 4 | artifact: $art_4 |"
   echo ""
 }
 
@@ -306,7 +340,7 @@ print_results() {
 # ══════════════════════════════════════════════════════════════════════════════
 echo ""
 echo "════════════════════════════════════════════════"
-echo "  Experiment 003 — JS & Python → .wasm Benchmark"
+echo "  Experiment 003 — JS, Python & AS → .wasm Benchmark"
 echo "════════════════════════════════════════════════"
 echo ""
 
@@ -316,6 +350,7 @@ run_leg "Leg 2a" run_leg2a
 run_leg "Leg 2b" run_leg2b
 run_leg "Leg 2c" run_leg2c
 run_leg "Leg 3"  run_leg3
+run_leg "Leg 4"  run_leg4
 
 print_results
 

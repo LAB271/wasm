@@ -54,6 +54,16 @@ print('ok')
   [ -f "$SCRIPT_DIR/python-raw/wit/proxy.wit" ]
 }
 
+# ── AssemblyScript source ────────────────────────────────────────────────────
+
+@test "as-hello/assembly/index.ts exists" {
+  [ -f "$SCRIPT_DIR/as-hello/assembly/index.ts" ]
+}
+
+@test "as-hello/build.sh is executable" {
+  [ -x "$SCRIPT_DIR/as-hello/build.sh" ]
+}
+
 # ── Runtime leg tests (skipped when ports not listening) ─────────────────────
 
 @test "leg 1a JS/Spin native — returns Hello World JSON" {
@@ -89,6 +99,12 @@ print('ok')
 @test "leg 3 Rust/wasmtime baseline — returns Hello World JSON" {
   skip_if_no_port 5035
   result=$(json_get 5035)
+  [ "$(valid_hello_json "$result")" = "ok" ]
+}
+
+@test "leg 4 AS/wasmtime — returns Hello World JSON" {
+  skip_if_no_port 5036
+  result=$(json_get 5036)
   [ "$(valid_hello_json "$result")" = "ok" ]
 }
 

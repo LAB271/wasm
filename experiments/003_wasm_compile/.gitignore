@@ -11,6 +11,8 @@ python-raw/componentize_py_types.py
 python-raw/componentize_py_async_support/
 python-raw/poll_loop.py
 rust/target/
+as-hello/node_modules/
+as-hello/build/
 __pycache__/
 *.py[cod]
 .venv/

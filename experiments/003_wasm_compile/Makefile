@@ -25,6 +25,8 @@ build: $(VENV)/bin/activate  ## Compile all sources to .wasm
 	cd python-spin && spin build
 	@echo "→ Building Rust baseline..."
 	cd rust && cargo build --target wasm32-wasip2 --release --quiet
+	@echo "→ Building AssemblyScript (asc + wasm-tools)..."
+	cd as-hello && npm ci --silent 2>/dev/null && ./build.sh
 	@echo "✓ All .wasm artifacts built"
 
 test:  ## Run BATS unit tests
@@ -42,6 +44,7 @@ clean:  ## Remove build artifacts
 	rm -f python-spin/app.wasm
 	rm -f python-raw/hello-py-raw.wasm
 	rm -rf rust/target
+	rm -rf as-hello/node_modules as-hello/build
 	$(CONTAINER_CMD) rmi -f hello-js-spin hello-py-spin 2>/dev/null || true
 
 help:  ## Show this help
