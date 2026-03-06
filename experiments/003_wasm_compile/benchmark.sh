@@ -137,7 +137,7 @@ run_leg2a() {
   pushd "$SCRIPT_DIR/python-raw" >/dev/null
     APP_2A=$(human_size app.py)
     BUILD_2A=$(timed_build "componentize-py" \
-      componentize-py -d wit -w proxy componentize app -o hello-py-raw.wasm 2>/dev/null)
+      componentize-py -d wit -w proxy componentize app -o hello-py-raw.wasm >/dev/null 2>&1)
     ARTIFACT_2A=$(human_size hello-py-raw.wasm)
     RUNTIME_2A="wasmtime $(wasmtime --version | awk '{print $2}')"
 

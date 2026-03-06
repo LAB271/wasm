@@ -62,13 +62,14 @@ rss_mb() {
 
 # ── Parse hey output ──────────────────────────────────────────────────────────
 hey_stat() {
-  local out=$1 stat=$2
+  local out=$1 stat=$2 val
   case "$stat" in
-    p50) echo "$out" | grep "50%%" | awk '{printf "%.1f", $3*1000}' ;;
-    p95) echo "$out" | grep "95%%" | awk '{printf "%.1f", $3*1000}' ;;
-    p99) echo "$out" | grep "99%%" | awk '{printf "%.1f", $3*1000}' ;;
-    rps) echo "$out" | grep "Requests/sec:" | awk '{printf "%.0f", $2}' ;;
+    p50) val=$(echo "$out" | grep "50%%" | awk '{printf "%.1f", $3*1000}') ;;
+    p95) val=$(echo "$out" | grep "95%%" | awk '{printf "%.1f", $3*1000}') ;;
+    p99) val=$(echo "$out" | grep "99%%" | awk '{printf "%.1f", $3*1000}') ;;
+    rps) val=$(echo "$out" | grep "Requests/sec:" | awk '{printf "%.0f", $2}') ;;
   esac
+  echo "${val:-n/a}"
 }
 
 # ── Descendant PIDs (recursive) ──────────────────────────────────────────────
