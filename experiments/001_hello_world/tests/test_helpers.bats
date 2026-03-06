@@ -2,7 +2,7 @@
 # Unit tests for lib/bench.sh helper functions
 
 setup() {
-  source "$BATS_TEST_DIRNAME/../lib/bench.sh"
+  source "$BATS_TEST_DIRNAME/../../lib/bench.sh"
 }
 
 # ── now_ms ────────────────────────────────────────────────────────────────────

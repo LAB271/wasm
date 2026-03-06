@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/lib/bench.sh"
+EXPERIMENTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$EXPERIMENTS_DIR/lib/bench.sh"
 
 HEY_N=${HEY_N:-1000}
 HEY_C=${HEY_C:-1}
@@ -152,7 +153,7 @@ run_leg3() {
   info "Leg 3: Wasmtime (port 5003)"
   require_port_free 5003 "Leg 3 Wasmtime"
 
-  pushd "$SCRIPT_DIR/leg3_wasmtime" >/dev/null
+  pushd "$EXPERIMENTS_DIR/shared/rust-hello" >/dev/null
   APP_3=$(human_size src/lib.rs)
   cargo build --target wasm32-wasip2 --release --quiet 2>&1
   WASM=$(find target/wasm32-wasip2/release -maxdepth 1 -name "*.wasm" | head -1)

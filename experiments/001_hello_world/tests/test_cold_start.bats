@@ -2,7 +2,7 @@
 # Tests for cold_start_ms and wait_for_http
 
 setup() {
-  source "$BATS_TEST_DIRNAME/../lib/bench.sh"
+  source "$BATS_TEST_DIRNAME/../../lib/bench.sh"
 }
 
 teardown() {

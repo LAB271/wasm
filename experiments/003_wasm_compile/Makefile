@@ -6,6 +6,7 @@ GIT_ROOT      := $(shell git rev-parse --show-toplevel)
 VENV          := $(GIT_ROOT)/.venv
 ACTIVATE      := . $(VENV)/bin/activate &&
 BUILD_DIR     := build
+RUST_HELLO    := $(shell cd .. && pwd)/shared/rust-hello
 
 $(VENV)/bin/activate: requirements.txt
 	uv venv --clear $(VENV)
@@ -39,9 +40,9 @@ build-py: $(VENV)/bin/activate  ## Build Python → .wasm (componentize-py + Spi
 
 build-rust:  ## Build Rust → .wasm (cargo wasm32-wasip2)
 	@echo "→ Building Rust baseline..."
-	cd rust && cargo build --target wasm32-wasip2 --release --quiet
+	cd $(RUST_HELLO) && cargo build --target wasm32-wasip2 --release --quiet
 	@mkdir -p $(BUILD_DIR)
-	cp rust/target/wasm32-wasip2/release/leg3.wasm $(BUILD_DIR)/hello-rust.wasm
+	cp $(RUST_HELLO)/target/wasm32-wasip2/release/leg3.wasm $(BUILD_DIR)/hello-rust.wasm
 
 test:  ## Run BATS unit tests
 	bats tests/
@@ -58,7 +59,6 @@ clean:  ## Remove build artifacts
 	rm -rf js-spin/node_modules js-spin/build js-spin/dist
 	rm -f python-spin/app.wasm
 	rm -f python-raw/hello-py-raw.wasm
-	rm -rf rust/target
 	$(CONTAINER_CMD) rmi -f hello-js-spin hello-py-spin 2>/dev/null || true
 
 help:  ## Show this help

@@ -16,7 +16,7 @@ clean:  ## Remove .venv, node_modules, target dirs
 	rm -rf leg2c_pyodide_playwright/node_modules
 	rm -rf leg4b_wasm_postgres_bridge/node_modules
 	rm -rf leg4c_wasmtime_postgres/node_modules
-	rm -rf leg3_wasmtime/target
+	rm -rf ../shared/rust-hello/target
 	rm -rf leg4c_wasmtime_postgres/target
 
 help:  ## Show this help

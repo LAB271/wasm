@@ -5,7 +5,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/lib/bench.sh"
+EXPERIMENTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$EXPERIMENTS_DIR/lib/bench.sh"
 
 HEY_N=${HEY_N:-1000}
 HEY_C=${HEY_C:-1}
@@ -224,7 +225,7 @@ run_leg3() {
   require_port_free 5035 "Leg 3"
   command -v cargo &>/dev/null || fail "cargo not found"
 
-  pushd "$SCRIPT_DIR/rust" >/dev/null
+  pushd "$EXPERIMENTS_DIR/shared/rust-hello" >/dev/null
     APP_3=$(human_size src/lib.rs)
     BUILD_3=$(timed_build "cargo wasm32-wasip2" \
       cargo build --target wasm32-wasip2 --release --quiet 2>/dev/null)

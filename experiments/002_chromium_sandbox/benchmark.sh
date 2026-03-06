@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/lib/bench.sh"
+EXPERIMENTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$EXPERIMENTS_DIR/lib/bench.sh"
 
 HEY_N=${HEY_N:-1000}
 HEY_C=${HEY_C:-1}

@@ -2,7 +2,7 @@
 # Tests for require_port_free
 
 setup() {
-  source "$BATS_TEST_DIRNAME/../lib/bench.sh"
+  source "$BATS_TEST_DIRNAME/../../lib/bench.sh"
 }
 
 @test "require_port_free succeeds when port is free" {
