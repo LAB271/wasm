@@ -1,7 +1,9 @@
 build/
 node_modules/
+js-spin-scaffold/
 js-spin/node_modules/
-js-spin/target/
+js-spin/build/
+js-spin/dist/
 python-spin/app.wasm
 python-raw/hello-py-raw.wasm
 rust/target/

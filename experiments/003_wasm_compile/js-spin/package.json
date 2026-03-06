@@ -2,11 +2,17 @@
   "name": "hello-js",
   "version": "0.1.0",
   "description": "Hello World JSON API — JS compiled to WASM via Spin",
-  "type": "module",
+  "main": "index.js",
   "scripts": {
-    "build": "npx @fermyon/spin-js-sdk build"
+    "build": "node build.mjs && mkdirp dist && j2w -i build/bundle.js --initLocation http://hello-js.localhost -o dist/hello-js.wasm"
+  },
+  "dependencies": {
+    "itty-router": "^5.0.18",
+    "@spinframework/build-tools": "^1.0.4",
+    "@spinframework/wasi-http-proxy": "^1.0.0"
   },
   "devDependencies": {
-    "@fermyon/spin-js-sdk": "^3.0.1"
+    "mkdirp": "^3.0.1",
+    "esbuild": "^0.25.8"
   }
 }

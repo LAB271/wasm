@@ -10,9 +10,10 @@ route = "/..."
 component = "hello-js"
 
 [component.hello-js]
-source = "target/hello-js.wasm"
+source = "dist/hello-js.wasm"
+exclude_files = ["**/node_modules"]
 allowed_outbound_hosts = []
 
 [component.hello-js.build]
-command = "npm run build"
-watch = ["src/**/*.js", "package.json"]
+command = ["npm install", "npm run build"]
+watch = ["src/**/*.js"]

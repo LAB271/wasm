@@ -1,14 +1,17 @@
-import { ResponseBuilder } from "@fermyon/spin-sdk";
+import { AutoRouter } from "itty-router";
 
-export const handleRequest = async function (_request) {
-  return new ResponseBuilder()
-    .status(200)
-    .header("content-type", "application/json")
-    .body(
-      JSON.stringify({
-        message: "Hello World",
-        timestamp: Date.now() / 1000.0,
-      })
-    )
-    .build();
-};
+const router = AutoRouter();
+
+router.get("/", () =>
+  new Response(
+    JSON.stringify({
+      message: "Hello World",
+      timestamp: Date.now() / 1000.0,
+    }),
+    { headers: { "content-type": "application/json" } }
+  )
+);
+
+addEventListener("fetch", (event) => {
+  event.respondWith(router.fetch(event.request));
+});

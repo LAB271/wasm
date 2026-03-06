@@ -70,7 +70,7 @@ run_leg1a() {
     APP_1A=$(human_size src/index.js)
     npm ci --silent 2>/dev/null || npm install --silent
     BUILD_1A=$(timed_build "spin build" spin build --quiet 2>/dev/null)
-    WASM_1A=$(find target -name "*.wasm" -maxdepth 2 | head -1)
+    WASM_1A=$(find dist -name "*.wasm" -maxdepth 1 | head -1)
     ARTIFACT_1A=$(human_size "$WASM_1A")
     RUNTIME_1A="spin $(spin --version 2>&1 | head -1 | awk '{print $NF}')"
 
@@ -98,7 +98,7 @@ run_leg1b() {
   pushd "$SCRIPT_DIR" >/dev/null
     # Ensure JS is built first
     [ -n "${ARTIFACT_1A:-}" ] || { pushd js-spin >/dev/null; spin build --quiet 2>/dev/null; popd >/dev/null; }
-    WASM_JS=$(find js-spin/target -name "*.wasm" -maxdepth 2 | head -1)
+    WASM_JS=$(find js-spin/dist -name "*.wasm" -maxdepth 1 | head -1)
 
     $CONTAINER_CMD build -t hello-js-spin \
       --build-arg APP_DIR=js-spin \

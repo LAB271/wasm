@@ -14,13 +14,11 @@ deps: $(VENV)/bin/activate  ## Install toolchain dependencies (spin, componentiz
 	brew install fermyon/tap/spin
 	@echo "→ Installing hey (HTTP load generator)..."
 	brew install hey
-	@echo "→ JS deps..."
-	cd js-spin && npm install
-	@echo "✓ deps ready  (componentize-py in $(VENV))"
+	@echo "✓ deps ready  (componentize-py in $(VENV); JS deps fetched at build time by spin build)"
 
 build: $(VENV)/bin/activate  ## Compile all sources to .wasm
 	@echo "→ Building JS (Spin)..."
-	cd js-spin && npm install --silent && spin build
+	cd js-spin && spin build
 	@echo "→ Building Python/raw (componentize-py)..."
 	cd python-raw && ../$(COMPONENTIZE) -d wit -w proxy componentize app -o hello-py-raw.wasm
 	@echo "→ Building Python (Spin)..."
@@ -40,7 +38,7 @@ bench-quick:  ## Quick benchmark (10 requests)
 
 clean:  ## Remove build artifacts
 	rm -rf $(VENV)
-	rm -rf js-spin/node_modules js-spin/target
+	rm -rf js-spin/node_modules js-spin/build js-spin/dist
 	rm -f python-spin/app.wasm
 	rm -f python-raw/hello-py-raw.wasm
 	rm -rf rust/target
