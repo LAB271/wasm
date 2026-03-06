@@ -27,7 +27,7 @@ build-js:  ## Build JS → .wasm (Spin)
 
 build-py: $(VENV)/bin/activate  ## Build Python → .wasm (componentize-py + Spin)
 	@echo "→ Building Python/raw (componentize-py)..."
-	cd python-raw && $(ACTIVATE) componentize-py --all-features -d wit -w proxy componentize app -o hello-py-raw.wasm
+	cd python-raw && VIRTUAL_ENV= $(VENV)/bin/componentize-py -d wit -w example:hello/proxy componentize app -o hello-py-raw.wasm
 	@echo "→ Building Python (Spin)..."
 	cd python-spin && $(ACTIVATE) spin build
 

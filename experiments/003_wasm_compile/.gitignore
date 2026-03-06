@@ -11,6 +11,7 @@ python-raw/wit_world/
 python-raw/componentize_py_types.py
 python-raw/componentize_py_async_support/
 python-raw/poll_loop.py
+python-raw/componentize_py_runtime.pyi
 rust/target/
 __pycache__/
 *.py[cod]
