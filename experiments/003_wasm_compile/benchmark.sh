@@ -56,7 +56,7 @@ run_leg() {
 timed_build() {
   local label=$1; shift
   local t0; t0=$(now_ms)
-  "$@"
+  "$@" >/dev/null
   echo $(( $(now_ms) - t0 ))
 }
 
@@ -73,7 +73,7 @@ run_leg1a() {
     BUILD_1A=$(timed_build "spin build" spin build --quiet 2>/dev/null)
     WASM_1A=$(find dist -name "*.wasm" -maxdepth 1 | head -1)
     ARTIFACT_1A=$(human_size "$WASM_1A")
-    RUNTIME_1A="spin $(spin --version 2>&1 | head -1 | awk '{print $NF}')"
+    RUNTIME_1A="spin $(spin --version 2>&1 | awk '{print $2}')"
 
     spin up --listen "127.0.0.1:5030" &>/dev/null &
     SPIN_1A_PID=$!
@@ -165,7 +165,7 @@ run_leg2b() {
     APP_2B=$(human_size app.py)
     BUILD_2B=$(timed_build "spin build (python)" spin build --quiet 2>/dev/null)
     ARTIFACT_2B=$(human_size app.wasm)
-    RUNTIME_2B="spin $(spin --version 2>&1 | head -1 | awk '{print $NF}')"
+    RUNTIME_2B="spin $(spin --version 2>&1 | awk '{print $2}')"
 
     spin up --listen "127.0.0.1:5033" &>/dev/null &
     SPIN_2B_PID=$!
