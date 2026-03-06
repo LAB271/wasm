@@ -7,7 +7,7 @@ VENV          := $(GIT_ROOT)/.venv
 ACTIVATE      := . $(VENV)/bin/activate &&
 
 $(VENV)/bin/activate: requirements.txt
-	uv venv $(VENV)
+	uv venv --clear $(VENV)
 	uv pip install --quiet -r requirements.txt
 	@touch $(VENV)/bin/activate
 
