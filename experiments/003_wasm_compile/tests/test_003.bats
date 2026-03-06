@@ -7,6 +7,8 @@
 # for standalone use start each leg manually first.
 
 SCRIPT_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
+GIT_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
+PYTHON="uv run --directory $GIT_ROOT python"
 
 # ── Helper: fetch JSON from a running leg ─────────────────────────────────────
 json_get() {
@@ -17,7 +19,7 @@ json_get() {
 # ── Source validation helper ──────────────────────────────────────────────────
 valid_hello_json() {
   local json=$1
-  echo "$json" | python3 -c "
+  echo "$json" | $PYTHON -c "
 import sys, json
 d = json.load(sys.stdin)
 assert 'message' in d, 'missing message field'
@@ -31,11 +33,11 @@ print('ok')
 # ── Python source file smoke tests (no runtime required) ─────────────────────
 
 @test "python-spin/app.py is syntactically valid Python" {
-  python3 -m py_compile "$SCRIPT_DIR/python-spin/app.py"
+  $PYTHON -m py_compile "$SCRIPT_DIR/python-spin/app.py"
 }
 
 @test "python-raw/app.py is syntactically valid Python" {
-  python3 -m py_compile "$SCRIPT_DIR/python-raw/app.py"
+  $PYTHON -m py_compile "$SCRIPT_DIR/python-raw/app.py"
 }
 
 # ── spin.toml presence ───────────────────────────────────────────────────────
