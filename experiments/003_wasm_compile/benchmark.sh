@@ -225,7 +225,7 @@ run_leg3() {
   require_port_free 5035 "Leg 3"
   command -v cargo &>/dev/null || fail "cargo not found"
 
-  pushd "$SCRIPT_DIR/rust" >/dev/null
+  pushd "$SCRIPT_DIR/rust-hello" >/dev/null
     APP_3=$(human_size src/lib.rs)
     BUILD_3=$(timed_build "cargo wasm32-wasip2" \
       cargo build --target wasm32-wasip2 --release --quiet 2>/dev/null)
