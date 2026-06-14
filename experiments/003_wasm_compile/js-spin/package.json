@@ -13,6 +13,6 @@
   },
   "devDependencies": {
     "mkdirp": "^3.0.1",
-    "esbuild": "^0.25.8"
+    "esbuild": "^0.28.1"
   }
 }
