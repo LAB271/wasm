@@ -5,6 +5,6 @@
     "asbuild": "asc assembly/index.ts --outFile build/hello-as-core.wasm --optimize --exportRuntime --lowMemoryLimit --use abort=assembly/index/abort"
   },
   "devDependencies": {
-    "assemblyscript": "^0.27.0"
+    "assemblyscript": "^0.28.20"
   }
 }

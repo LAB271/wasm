@@ -2,6 +2,6 @@
   "name": "leg4c-wasmtime-postgres-sidecar",
   "private": true,
   "dependencies": {
-    "pg": "^8.13.0"
+    "pg": "^8.22.0"
   }
 }
