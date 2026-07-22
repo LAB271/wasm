@@ -14,5 +14,8 @@
   "devDependencies": {
     "mkdirp": "^3.0.1",
     "esbuild": "^0.25.8"
+  },
+  "overrides": {
+    "@bytecodealliance/jco": "~1.17.9"
   }
 }
