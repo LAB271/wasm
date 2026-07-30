@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Experiment 006 — Worker.terminate() as a kill switch</title>
+<style>
+  body { font-family: ui-monospace, monospace; background: #111; color: #ddd; padding: 2rem; }
+  #status { color: #6f6; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Experiment 006 — Worker.terminate() as a kill switch</h1>
+<p>Query param <code>?variant=pure|alloc</code>. Starts a genuinely unconditional
+   WASM loop in a Worker (no exit condition, no cooperative check). The loop
+   ticks a <code>SharedArrayBuffer</code> heartbeat counter every N iterations —
+   observability only, not a control mechanism. <code>window.terminateWorker()</code>
+   and <code>window.readHeartbeat()</code> are exposed for the benchmark harness.</p>
+<div id="status">starting…</div>
+
+<script type="module">
+  const params = new URLSearchParams(location.search);
+  const variant = params.get("variant") === "alloc" ? "alloc" : "pure";
+
+  const sab = new SharedArrayBuffer(4);
+  const heartbeat = new Int32Array(sab);
+
+  window.__exp006 = { variant, started: false };
+  window.readHeartbeat = () => Atomics.load(heartbeat, 0);
+  window.terminateWorker = () => {
+    const t0 = performance.now();
+    worker.terminate();
+    return performance.now() - t0; // time for the *call* to return, not proof of death
+  };
+
+  const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+  worker.onmessage = (e) => {
+    if (e.data.type === "started") {
+      window.__exp006.started = true;
+      document.getElementById("status").textContent = `loop_${variant} running`;
+      document.body.setAttribute("data-exp006-started", "true");
+    }
+  };
+  worker.postMessage({ type: "run", variant, sab });
+</script>
+</body>
+</html>

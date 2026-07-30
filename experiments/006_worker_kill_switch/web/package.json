@@ -1,0 +1,9 @@
+{
+  "name": "experiment-006-worker-kill-switch-web",
+  "version": "1.0.0",
+  "description": "Web assets — vendored into by build.sh, no scripts of its own",
+  "type": "module",
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "0.4.2"
+  }
+}
