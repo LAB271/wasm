@@ -1,0 +1,12 @@
+{
+  "name": "experiment-006-worker-kill-switch",
+  "version": "1.0.0",
+  "description": "Worker.terminate() as a kill switch for a genuine infinite loop",
+  "type": "module",
+  "scripts": {
+    "harness": "node harness.js"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

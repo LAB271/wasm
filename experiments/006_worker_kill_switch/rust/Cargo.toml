@@ -1,0 +1,17 @@
+[package]
+name = "kill_switch"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "loop_pure"
+path = "src/bin/loop_pure.rs"
+
+[[bin]]
+name = "loop_alloc"
+path = "src/bin/loop_alloc.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
