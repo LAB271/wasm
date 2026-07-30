@@ -20,6 +20,7 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [002](experiments/002_chromium_sandbox/) | chromium_sandbox | done | Chromium+Pyodide isolation strategies — worker pools, BrowserContext pooling, JS↔WASM bridge overhead |
 | [003](experiments/003_wasm_compile/) | wasm_compile | results pending | Compiling JS/Python/Rust to `.wasm` via Spin/componentize-py/cargo, native vs. podman |
 | [004](experiments/004_static_wasi_hello/) | static_wasi_hello | done | Static HTML page, zero server at execution time — `mvl-lang/mvl-playground`'s actual architecture |
+| [005](experiments/005_stdout_capture_load/) | stdout_capture_load | done | stdout/stderr capture correctness + overhead at 10/1,000/100,000 lines |
 
 ## Structure
 

@@ -1,0 +1,15 @@
+{
+  "name": "experiment-005-stdout-capture-load",
+  "version": "1.0.0",
+  "description": "stdout/stderr capture correctness and overhead under load",
+  "type": "module",
+  "scripts": {
+    "measure": "node measure.mjs"
+  },
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "0.4.2"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

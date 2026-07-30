@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Experiment 005 — stdout/stderr capture under load</title>
+<style>
+  body { font-family: ui-monospace, monospace; background: #111; color: #ddd; padding: 2rem; }
+  #out { white-space: pre-wrap; border: 1px solid #444; padding: 1rem; max-height: 40vh; overflow: auto; }
+  .stderr { color: #f66; }
+  #status { color: #6f6; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Experiment 005 — stdout/stderr capture under load</h1>
+<p>
+  Query params: <code>?n=1000&amp;dom=1</code> — <code>n</code> = lines per stream (total
+  captured lines = 2n, stdout+stderr interleaved); <code>dom=1</code> appends every
+  received line to the DOM (naive), <code>dom=0</code> only counts/verifies it in memory
+  and renders a summary once at the end. Both variants always verify correctness.
+</p>
+<div id="out"></div>
+<div id="status">running…</div>
+
+<script type="module">
+  const params = new URLSearchParams(location.search);
+  const n = parseInt(params.get("n") || "10", 10);
+  const renderDom = params.get("dom") !== "0";
+
+  window.__exp005 = {
+    done: false,
+    error: null,
+    n,
+    renderDom,
+    // Timing
+    mainThreadStartMs: null,   // performance.now() when the run message was sent
+    firstMsgMs: null,          // performance.now() at first stdout/stderr message received
+    lastMsgMs: null,           // performance.now() at last stdout/stderr message received
+    workerElapsedMs: null,     // reported by the worker itself (WASM exec + postMessage dispatch)
+    // Correctness
+    stdoutSeq: [],
+    stderrSeq: [],
+    stdoutCount: 0,
+    stderrCount: 0,
+  };
+
+  const out = document.getElementById("out");
+  const status = document.getElementById("status");
+
+  function parseSeq(line, prefix) {
+    // Lines look like "OUT 42" / "ERR 42".
+    if (!line.startsWith(prefix)) return null;
+    const n = parseInt(line.slice(prefix.length + 1), 10);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function checkMonotonic(seqArray) {
+    for (let i = 0; i < seqArray.length; i++) {
+      if (seqArray[i] !== i) return { ok: false, firstBreakAt: i, expected: i, got: seqArray[i] };
+    }
+    return { ok: true };
+  }
+
+  const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+
+  worker.onmessage = (e) => {
+    const msg = e.data;
+    const now = performance.now();
+
+    if (msg.type === "stdout" || msg.type === "stderr") {
+      if (window.__exp005.firstMsgMs === null) window.__exp005.firstMsgMs = now;
+      window.__exp005.lastMsgMs = now;
+
+      if (msg.type === "stdout") {
+        window.__exp005.stdoutCount++;
+        const seq = parseSeq(msg.line, "OUT");
+        if (seq !== null) window.__exp005.stdoutSeq.push(seq);
+      } else {
+        window.__exp005.stderrCount++;
+        const seq = parseSeq(msg.line, "ERR");
+        if (seq !== null) window.__exp005.stderrSeq.push(seq);
+      }
+
+      if (renderDom) {
+        const span = document.createElement("div");
+        if (msg.type === "stderr") span.className = "stderr";
+        span.textContent = msg.line;
+        out.appendChild(span);
+      }
+    } else if (msg.type === "done") {
+      window.__exp005.done = true;
+      window.__exp005.exitCode = msg.exitCode;
+      window.__exp005.workerElapsedMs = msg.workerElapsedMs;
+      window.__exp005.stdoutCheck = checkMonotonic(window.__exp005.stdoutSeq);
+      window.__exp005.stderrCheck = checkMonotonic(window.__exp005.stderrSeq);
+      const mainMs = window.__exp005.lastMsgMs - window.__exp005.mainThreadStartMs;
+      status.textContent = renderDom
+        ? `done — ${window.__exp005.stdoutCount + window.__exp005.stderrCount} lines, main-thread ${mainMs.toFixed(1)}ms (dom=1)`
+        : `done — ${window.__exp005.stdoutCount + window.__exp005.stderrCount} lines, main-thread ${mainMs.toFixed(1)}ms (dom=0)`;
+      if (!renderDom) {
+        out.textContent = `[dom=0 — ${window.__exp005.stdoutCount} stdout + ${window.__exp005.stderrCount} stderr lines captured, not individually rendered]`;
+      }
+      document.body.setAttribute("data-exp005-done", "true");
+    } else if (msg.type === "error") {
+      window.__exp005.done = true;
+      window.__exp005.error = msg.message;
+      status.textContent = `error: ${msg.message}`;
+      status.style.color = "#f66";
+      document.body.setAttribute("data-exp005-done", "true");
+    }
+  };
+
+  window.__exp005.mainThreadStartMs = performance.now();
+  worker.postMessage({ type: "run", n });
+</script>
+</body>
+</html>
