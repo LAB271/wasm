@@ -38,14 +38,28 @@ now_ms() { python3 -c "import time; print(int(time.time()*1000))"; }
 # Usage: cold_start_ms <port> [path] [timeout_seconds]
 cold_start_ms() {
   local port=$1 path=${2:-/} timeout=${3:-10}
-  local start end iterations
+  local start end iterations succeeded=0
   iterations=$(( timeout * 10 ))  # 0.1s per iteration
   start=$(now_ms)
   for i in $(seq 1 "$iterations"); do
-    curl -sf "http://127.0.0.1:$port$path" &>/dev/null && break
+    if curl -sf "http://127.0.0.1:$port$path" &>/dev/null; then
+      succeeded=1
+      break
+    fi
     sleep 0.1
   done
   end=$(now_ms)
+  # Found and fixed in experiment 007: this previously had no
+  # success/failure signal at all -- if the server never came up, the loop
+  # fell through and printed the full timeout budget as if it were a real
+  # cold-start measurement (silently fabricating a number, exactly the
+  # "captured the wrong exit code" failure shape). Now it fails loudly:
+  # empty stdout, non-zero exit, and a stderr message naming the timeout,
+  # rather than a number indistinguishable from a real measurement.
+  if [ "$succeeded" -ne 1 ]; then
+    fail "cold_start_ms: port $port$path never responded within ${timeout}s"
+    return 1
+  fi
   echo $(( end - start ))
 }
 
