@@ -16,7 +16,10 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 
 | # | Name | Status | What it tests |
 |---|------|--------|---------------|
-| [001](experiments/001_hello_world/) | hello_world | planned | Flask/Docker vs Pyodide/Chromium vs Wasmtime — cold start, memory, throughput |
+| [001](experiments/001_hello_world/) | hello_world | results pending | Flask/Docker vs Pyodide/Chromium vs Wasmtime — cold start, memory, throughput |
+| [002](experiments/002_chromium_sandbox/) | chromium_sandbox | done | Chromium+Pyodide isolation strategies — worker pools, BrowserContext pooling, JS↔WASM bridge overhead |
+| [003](experiments/003_wasm_compile/) | wasm_compile | results pending | Compiling JS/Python/Rust to `.wasm` via Spin/componentize-py/cargo, native vs. podman |
+| [004](experiments/004_static_wasi_hello/) | static_wasi_hello | done | Static HTML page, zero server at execution time — `mvl-lang/mvl-playground`'s actual architecture |
 
 ## Structure
 

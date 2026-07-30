@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Experiment 004 — static WASI hello world</title>
+<style>
+  body { font-family: ui-monospace, monospace; background: #111; color: #ddd; padding: 2rem; }
+  #out { white-space: pre-wrap; border: 1px solid #444; padding: 1rem; min-height: 4rem; }
+  .stderr { color: #f66; }
+  #status { color: #6f6; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Experiment 004 — static WASI hello world</h1>
+<p>No server runs at view time. This page fetches a pre-compiled <code>hello_wasi.wasm</code>
+   and a vendored copy of <code>@bjorn3/browser_wasi_shim</code> — both same-origin static
+   files produced ahead of time by <code>build.sh</code> — and runs the binary in a Web
+   Worker. This page's own load is the entire "runtime."</p>
+<div id="out"></div>
+<div id="status">running…</div>
+
+<script type="module">
+  // Cold-start measurement: from navigation start (performance.timeOrigin)
+  // to the moment the worker signals completion. Exposed on `window` so a
+  // benchmark harness (e.g. Playwright) can read it back without needing
+  // to instrument this page any further than what a real user's page load
+  // already does.
+  window.__exp004 = { coldStartMs: null, done: false, exitCode: null, error: null };
+
+  const out = document.getElementById("out");
+  const status = document.getElementById("status");
+
+  function appendLine(text, cls) {
+    const span = document.createElement("div");
+    if (cls) span.className = cls;
+    span.textContent = text;
+    out.appendChild(span);
+  }
+
+  const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+
+  worker.onmessage = (e) => {
+    const msg = e.data;
+    if (msg.type === "stdout") {
+      appendLine(msg.line);
+    } else if (msg.type === "stderr") {
+      appendLine(msg.line, "stderr");
+    } else if (msg.type === "done") {
+      window.__exp004.coldStartMs = performance.now();
+      window.__exp004.done = true;
+      window.__exp004.exitCode = msg.exitCode;
+      status.textContent = `done (exit code ${msg.exitCode}) — ${window.__exp004.coldStartMs.toFixed(1)}ms since navigation start`;
+      document.body.setAttribute("data-exp004-done", "true");
+    } else if (msg.type === "error") {
+      window.__exp004.done = true;
+      window.__exp004.error = msg.message;
+      status.textContent = `error: ${msg.message}`;
+      status.style.color = "#f66";
+      document.body.setAttribute("data-exp004-done", "true");
+    }
+  };
+
+  worker.postMessage({ type: "run" });
+</script>
+</body>
+</html>
