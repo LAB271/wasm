@@ -1,0 +1,13 @@
+[package]
+name = "hello_wasi"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "hello_wasi"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
