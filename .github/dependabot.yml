@@ -1,0 +1,23 @@
+# A public repo publishes its dependency tree, so a known-vulnerable pin is
+# visible to everyone - keep the updates flowing.
+#
+# `cooldown` waits out a freshly published version, which is the cheap mitigation
+# for a compromised release being pulled straight into a PR.
+#
+# Each experiment carries its own manifest, so the ecosystems are pointed at the
+# experiment directories rather than the root. Add an entry when a new experiment
+# introduces a manifest; there are no workflows yet, hence no `github-actions`.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/experiments/002_chromium_sandbox"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+  - package-ecosystem: "pip"
+    directory: "/experiments/003_wasm_compile"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
