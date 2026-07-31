@@ -133,9 +133,9 @@ export function createMvlRuntime() {
       const s = readString(ptr, len).trim();
       const n = Number(s);
       if (s !== "" && !isNaN(n) && Number.isInteger(n)) {
-        return storeResult(1, BigInt(n));
+        return storeResult(0, BigInt(n));
       }
-      return storeResult(0, 0n, `invalid integer: "${s}"`);
+      return storeResult(1, 0n, `invalid integer: "${s}"`);
     },
 
     // ── Array functions (handle-based) ────────────────────────────────
@@ -230,12 +230,26 @@ export function createMvlRuntime() {
     },
 
     // ── Option functions ─────────────────────────────────────────────
+    //
+    // Tag convention: 0 = Some (has a value), 1 = None. Verified empirically
+    // against the compiler's actual WAT output (not assumed): a minimal
+    // `xs.get(i).unwrap_or(dflt)` compiles to
+    //   call $_mvl_option_tag / i32.eqz / if (result i64)   <- Some branch
+    //     call $_mvl_option_value_i64
+    //   else                                                 <- None branch
+    //     local.get $dflt
+    // i32.eqz branches on tag==0, and that branch reads the value — so
+    // tag==0 must mean Some. This was previously inverted here (0=None,
+    // 1=Some, matching mvl-playground's runtime.ts) which silently returned
+    // wrong values (not a crash) for every unwrap_or/Option-consuming call.
+    // See experiments/008_mvl_example_wasm_harness/README.md for the fix
+    // writeup and probe script.
 
-    _mvl_option_some_i64: (val) => storeOption(1, val),
-    _mvl_option_some_i32: (val) => storeOption(1, val),
-    _mvl_option_none: () => storeOption(0, 0),
+    _mvl_option_some_i64: (val) => storeOption(0, val),
+    _mvl_option_some_i32: (val) => storeOption(0, val),
+    _mvl_option_none: () => storeOption(1, 0),
 
-    _mvl_option_tag: (h) => options.get(h)?.tag ?? 0,
+    _mvl_option_tag: (h) => options.get(h)?.tag ?? 1,
 
     _mvl_option_value_i64: (h) => {
       const opt = options.get(h);
@@ -253,27 +267,30 @@ export function createMvlRuntime() {
 
     _mvl_array_get_option_i64: (h, idx) => {
       const arr = arrays.get(h);
-      if (!arr) return storeOption(0, 0);
+      if (!arr) return storeOption(1, 0);
       const i = Number(idx);
-      if (i < 0 || i >= arr.length) return storeOption(0, 0);
-      return storeOption(1, BigInt(arr[i]));
+      if (i < 0 || i >= arr.length) return storeOption(1, 0);
+      return storeOption(0, BigInt(arr[i]));
     },
 
     _mvl_array_get_option_i32: (h, idx) => {
       const arr = arrays.get(h);
-      if (!arr) return storeOption(0, 0);
+      if (!arr) return storeOption(1, 0);
       const i = Number(idx);
-      if (i < 0 || i >= arr.length) return storeOption(0, 0);
-      return storeOption(1, arr[i]);
+      if (i < 0 || i >= arr.length) return storeOption(1, 0);
+      return storeOption(0, arr[i]);
     },
 
     // ── Result functions ──────────────────────────────────────────────
+    //
+    // Same tag inversion fix as Option, verified the same way (a minimal
+    // `s.parse_int().unwrap_or(dflt)` probe): 0 = Ok, 1 = Err.
 
-    _mvl_result_ok_i64: (val) => storeResult(1, val),
-    _mvl_result_ok_i32: (val) => storeResult(1, val),
-    _mvl_result_err_str: (ptr, len) => storeResult(0, 0, readString(ptr, len)),
+    _mvl_result_ok_i64: (val) => storeResult(0, val),
+    _mvl_result_ok_i32: (val) => storeResult(0, val),
+    _mvl_result_err_str: (ptr, len) => storeResult(1, 0, readString(ptr, len)),
 
-    _mvl_result_tag: (h) => results.get(h)?.tag ?? 0,
+    _mvl_result_tag: (h) => results.get(h)?.tag ?? 1,
 
     _mvl_result_value_i64: (h) => {
       const r = results.get(h);
@@ -301,10 +318,10 @@ export function createMvlRuntime() {
 
     _mvl_map_get_si64: (h, kp, kl) => {
       const m = maps.get(h);
-      if (!m) return storeOption(0, 0);
+      if (!m) return storeOption(1, 0);
       const val = m.get(readString(kp, kl));
-      if (val === undefined) return storeOption(0, 0);
-      return storeOption(1, BigInt(val));
+      if (val === undefined) return storeOption(1, 0);
+      return storeOption(0, BigInt(val));
     },
 
     _mvl_map_contains_key_si64: (h, kp, kl) =>
