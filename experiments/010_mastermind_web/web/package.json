@@ -1,0 +1,8 @@
+{
+  "name": "mastermind-web",
+  "private": true,
+  "description": "Dev-only: TypeScript compiler for app.ts. No runtime deps — the app is plain ES modules served statically.",
+  "devDependencies": {
+    "typescript": "^7.0.0"
+  }
+}

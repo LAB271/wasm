@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Mastermind — WASM</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <header>
+      <h1>MASTERMIND<span class="wasm-badge">WASM</span></h1>
+      <p class="tagline">
+        Scoring runs entirely in a compiled <code>.wasm</code> module — every guess calls
+        <code>score_guess()</code>, a pure <code>total fn</code> transpiled straight from
+        <a href="https://github.com/mvl-lang/mvl/tree/main/examples/mastermind" target="_blank" rel="noopener">MVL source</a>,
+        no server round-trip.
+      </p>
+    </header>
+
+    <section id="status-bar">
+      <div class="stat"><span class="label">Attempt</span><span id="attempt-count">0</span><span class="label">/ <span id="attempt-max">10</span></span></div>
+      <div class="stat"><span class="label">Engine</span><span id="engine-status" class="loading">loading wasm…</span></div>
+      <button id="new-game-btn">New Game</button>
+    </section>
+
+    <section id="board" aria-label="Guess history"></section>
+
+    <section id="picker">
+      <div id="current-guess" aria-label="Current guess"></div>
+      <div id="palette" role="group" aria-label="Color palette"></div>
+      <div id="picker-actions">
+        <button id="clear-btn">Clear</button>
+        <button id="submit-btn" disabled>Submit guess</button>
+      </div>
+    </section>
+
+    <div id="overlay" class="hidden">
+      <div id="overlay-card">
+        <h2 id="overlay-title"></h2>
+        <p id="overlay-body"></p>
+        <button id="overlay-btn">Play again</button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="dist/app.js"></script>
+</body>
+</html>

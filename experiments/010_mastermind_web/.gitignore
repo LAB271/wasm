@@ -1,0 +1,5 @@
+# node_modules/, package-lock.json already covered by repo-root .gitignore.
+vendor/code.wat
+vendor/code.wasm
+web/code.wasm
+web/dist/
