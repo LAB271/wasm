@@ -26,6 +26,7 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [008](experiments/008_mvl_example_wasm_harness/) | mvl_example_wasm_harness | done | Standalone (non-browser) host for `mvl build --backend=wasm` output — found and fixed 3 real memory/tag bugs in the ported runtime, one of which was mislabeled as a compiler bug (mvl-lang/mvl#2083, corrected and closed) |
 | [009](experiments/009_rust_native_host/) | rust_native_host | done | Native Rust host embedding `wasmtime` directly, no HTTP — checks a Medium article's "200µs" claim against true cold start and against its own methodology |
 | [010](experiments/010_mastermind_web/) | mastermind_web | done | Mastermind scored entirely by a compiled `.wasm` module, click-driven UI — reverse-engineered the struct-return ABI, worked around a dead-code-elimination bug dropping string data for unreached `pub` functions |
+| [011](experiments/011_mastermind_cli_wasi/) | mastermind_cli_wasi | done | Same game, pure Rust, `wasm32-wasip1`, real WASI `fd_read` stdin — proves genuine interactive I/O works under WASM/WASI, isolating that MVL's `--backend=wasm` gap is backend-specific, not a WASM/WASI limitation |
 
 ## Structure
 
