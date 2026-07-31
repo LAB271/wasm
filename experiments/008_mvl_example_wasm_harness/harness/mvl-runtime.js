@@ -24,28 +24,103 @@ function newHandle() {
   return nextHandle++;
 }
 
+// Bump allocator for structs, carving real linear-memory addresses.
+//
+// Found while building experiment 010 (mastermind_web) and reverse-
+// engineering score_guess's WAT: `_mvl_struct_alloc`'s return value is NOT
+// treated as an opaque JS-side handle by the compiled module — the WASM
+// code does raw `i64.store offset=N` / `i64.load offset=N` directly on it
+// (e.g. score_guess writes Feedback.blacks/whites at +0/+8 of whatever
+// _mvl_struct_alloc returned; render_feedback reads a Feedback struct back
+// the same way). A JS-side handle-table index (1, 2, 3, ...) used as a raw
+// memory address corrupts real module memory — those low addresses overlap
+// static rodata (string literals, etc.) in any nontrivial module.
+//
+// This previously used the same handle-table pattern as every other
+// _mvl_*_alloc/new function here (fine for those — arrays/strings/options
+// are only ever read back through a runtime FUNCTION CALL, e.g.
+// _mvl_option_value_i64, never via raw i64.load on the handle itself).
+// Structs are the one exception: verified directly via an isolated
+// score_guess probe that a real bump allocator is required, a handle
+// table silently produces garbage.
+//
+// This candidate root-causing actor_trading's crash (mvl-lang/mvl#2083,
+// filed before this fix existed): actor_trading's main.wat calls
+// $_mvl_struct_alloc 18 times (Order/Fill are both structs), so this
+// harness had been running that test against a broken allocator the whole
+// time the "actor message routing" bug was diagnosed and filed. Re-run
+// after this fix, below, to check whether the crash is actually this bug
+// instead.
+//
+// Starts at 1MB — far above any static data a realistically-sized example
+// module would emit — and grows the shared memory on demand. Never frees;
+// fine for a short-lived test-harness process, not fine for a long-running
+// host (documented in README).
+const SCRATCH_HEAP_BASE = 32768;
+const PAGE_SIZE = 65536;
+
 export function createMvlRuntime() {
   const memory = new WebAssembly.Memory({ initial: 1, maximum: 256 });
   const u8 = () => new Uint8Array(memory.buffer);
 
-  const strings = new Map();
+  let scratchHeapPtr = SCRATCH_HEAP_BASE;
+  function bumpAllocScratch(size) {
+    const end = scratchHeapPtr + size;
+    const neededPages = Math.ceil(end / PAGE_SIZE);
+    const currentPages = memory.buffer.byteLength / PAGE_SIZE;
+    if (neededPages > currentPages) {
+      memory.grow(neededPages - currentPages);
+    }
+    const ptr = scratchHeapPtr;
+    scratchHeapPtr = (end + 7) & ~7; // 8-byte align, matches typical wasm ABI expectations
+    return ptr;
+  }
+
   const arrays = new Map();
   const options = new Map();
   const results = new Map();
   const maps = new Map();
-  const structs = new Map();
 
   const decoder = new TextDecoder("utf-8");
+  const encoder = new TextEncoder();
 
   function readString(ptr, len) {
     if (len <= 0) return "";
     return decoder.decode(u8().subarray(ptr, ptr + len));
   }
 
+  // String-CREATING functions (_mvl_string_new/clone/concat/substring/
+  // to_upper/to_lower/trim/replace) hit the exact same bug as
+  // _mvl_struct_alloc/_mvl_array_get (see comment above bumpAllocScratch):
+  // their return value is read back via raw `i32.load offset=0`
+  // (data ptr) / `i32.load offset=4` (byte len) directly on the compiled
+  // module side, e.g. `s.concat(s)` compiles to
+  //   call $_mvl_string_concat
+  //   local.tee $tmp / i32.load offset=0 / ... / i32.load offset=4
+  // — an 8-byte {ptr:i32, len:i32} descriptor in real linear memory, NOT a
+  // JS-side string handle. storeString/strings-map (as still used by every
+  // OTHER experiment 008 test case that never exercised .concat()-style
+  // chains) silently produced garbage here for the same reason structs did.
+  // Fixed the same way: write the UTF-8 bytes into scratch memory, write an
+  // 8-byte descriptor pointing at them, return the descriptor's address.
   function storeString(s) {
-    const h = newHandle();
-    strings.set(h, s);
-    return h;
+    const bytes = encoder.encode(s);
+    const dataPtr = bumpAllocScratch(bytes.length);
+    if (bytes.length > 0) u8().set(bytes, dataPtr);
+    const descPtr = bumpAllocScratch(8);
+    const dv = new DataView(memory.buffer);
+    dv.setInt32(descPtr, dataPtr, true);
+    dv.setInt32(descPtr + 4, bytes.length, true);
+    return descPtr;
+  }
+
+  // Read back a string previously created by storeString, given its
+  // descriptor pointer (NOT a JS handle — see storeString above).
+  function readStoredString(descPtr) {
+    const dv = new DataView(memory.buffer);
+    const dataPtr = dv.getInt32(descPtr, true);
+    const len = dv.getInt32(descPtr + 4, true);
+    return readString(dataPtr, len);
   }
 
   function storeArray(a) {
@@ -100,14 +175,18 @@ export function createMvlRuntime() {
 
     _mvl_string_new: (ptr, len) => storeString(readString(ptr, len)),
 
-    _mvl_string_clone: (h) => {
-      const s = strings.get(h);
-      return s !== undefined ? storeString(s) : storeString("");
-    },
+    // No confirmed call site (String has no .clone() method reachable from
+    // MVL source as of this compiler version — verified: `s.clone()`
+    // produces "no method `clone` on type `String`"). Kept for import
+    // completeness, consistent with the descriptor convention in case a
+    // future compiler version emits it. Takes a descriptor pointer, not a
+    // JS handle.
+    _mvl_string_clone: (descPtr) => storeString(readStoredString(descPtr)),
 
-    _mvl_string_drop: (h) => {
-      strings.delete(h);
-    },
+    // Never frees (see bumpAllocScratch) — fine for a short-lived harness
+    // process, not a real GC. h is a descriptor pointer now, not a handle;
+    // nothing to look up or delete.
+    _mvl_string_drop: (_descPtr) => {},
 
     _mvl_string_concat: (p1, l1, p2, l2) =>
       storeString(readString(p1, l1) + readString(p2, l2)),
@@ -162,11 +241,26 @@ export function createMvlRuntime() {
       arrays.get(h)?.push(val);
     },
 
+    // Same raw-pointer convention as _mvl_struct_alloc (see top-of-file
+    // comment): the WAT for a `for x in [literal, array]` loop does
+    // `call $_mvl_array_get / i64.load offset=0` on the return value, so
+    // this must return a real memory address holding the element, not the
+    // element itself. Contrast with _mvl_array_get_option_i64/i32 below,
+    // which ARE read back through a runtime function call
+    // (_mvl_option_value_i64/i32) and so are safe as JS-side handles.
+    // Writes at the width matching how the element was pushed (i64 as
+    // BigInt, i32/f64 as Number) so whichever *.load the caller uses reads
+    // the right bytes.
     _mvl_array_get: (h, idx) => {
       const arr = arrays.get(h);
-      if (!arr) return 0;
       const i = Number(idx);
-      return i >= 0 && i < arr.length ? arr[i] : 0;
+      const val = arr && i >= 0 && i < arr.length ? arr[i] : 0;
+      const ptr = bumpAllocScratch(8);
+      const dv = new DataView(memory.buffer);
+      if (typeof val === "bigint") dv.setBigInt64(ptr, val, true);
+      else if (Number.isInteger(val)) dv.setInt32(ptr, val, true);
+      else dv.setFloat64(ptr, val, true);
+      return ptr;
     },
 
     _mvl_array_clone: (h) => {
@@ -333,11 +427,9 @@ export function createMvlRuntime() {
 
     // ── Struct ─────────────────────────────────────────────────────────
 
-    _mvl_struct_alloc: (size) => {
-      const h = newHandle();
-      structs.set(h, new Uint8Array(size));
-      return h;
-    },
+    // Real bump allocator into linear memory — see the top-of-file comment.
+    // NOT a handle-table index like every other _mvl_*_alloc/new here.
+    _mvl_struct_alloc: (size) => bumpAllocScratch(size),
 
     // ── Audit (no-op — this harness doesn't persist an audit trail) ───
 

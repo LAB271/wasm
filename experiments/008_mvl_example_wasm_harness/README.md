@@ -53,36 +53,20 @@ Chosen deliberately as something with real complexity, not another hello-world:
 (`OrderBook`, `Matcher`), not the toy ping-pong of `actor_pingpong` (the only
 actor-based example currently curated into the playground).
 
-**Result: FAIL, precisely located.**
+**Original result (superseded below): FAIL, filed as [mvl-lang/mvl#2083](https://github.com/mvl-lang/mvl/issues/2083)** —
+a trap in `order_book_submit` during the first actor-to-actor message dispatch, with
+what looked like solid evidence it wasn't a missing import, a memory-capacity issue,
+or one of three already-tracked WASM gaps. **That issue has since been corrected and
+closed — see "Fix: `_mvl_struct_alloc`/`_mvl_array_get`" below. It was a bug in this
+harness, not the compiler.** Left the original repro details out of this README
+(they're preserved in the issue's history) since they'd otherwise read as evidence
+for a conclusion this file no longer holds.
 
-```
-=== actor_trading ===
-  FAIL — output diverges from mvl run (native backend)
-  --- diff (expected vs actual) ---
-  4,19d3
-  < 
-  < --- scenario 2: resting bid crossed by aggressive ask ---
-  < OrderBook: ask 0 price=100 qty=10
-  ... [rest of scenarios 2-3 never printed]
-  --- runtime error ---
-      at order_book_submit (wasm://.../wasm-function[66]:0xbbe)
-      at order_book_dispatch (wasm://.../wasm-function[67]:0xc46)
-      at __mvl_actor_route (wasm://.../wasm-function[75]:0xf6b)
-      at __mvl_actor_pump (wasm://.../wasm-function[76]:0xfb1)
-      at _start (wasm://.../wasm-function[79]:0x1091)
-```
-
-The module compiles cleanly (no warnings, all 60 `runtime` imports satisfied) and
-runs correctly right up until the first real actor-to-actor message dispatch, then
-traps with `memory access out of bounds` inside the compiled module's own code —
-not in a call to the JS runtime.
-
-**Ruled out before filing, not assumed:**
-- Not a missing import — the crash is inside `order_book_submit`, not at a call boundary into JS.
-- Not a memory-capacity issue — reproduces identically at `initial: 1` (64KB, the playground's actual default) and `initial: 64` (4MB). The module never emits `memory.grow` (`grep -c memory.grow main.wat` = 0), so more memory can't help; something computes or dereferences a wrong address.
-- Not one of the three already-tracked WASM gaps (mvl#2054 extension methods, #2055 `std.env.exit`, #2056 `std.log`) — none involve actor message routing.
-
-**Filed as [mvl-lang/mvl#2083](https://github.com/mvl-lang/mvl/issues/2083).** New bug, not a duplicate — checked all three related issues before filing.
+**Current result, after both runtime fixes below: no crash.** All three scenarios
+run to completion, and every printed value (prices, quantities, bid/ask ids, fill
+messages) matches a native `mvl run main.mvl` execution exactly. The one remaining
+difference is explained in "A genuine backend difference: actor output ordering" —
+it isn't a bug, and isn't what #2083 was about.
 
 ## Fix: Option/Result tag polarity was inverted (found while building experiment 010)
 
@@ -130,6 +114,86 @@ against the fix (verified both ways via `git stash` before committing).
 **Not fixed here**: `mvl-lang/mvl-playground`'s own `runtime.ts` has the identical
 bug and is production code — out of scope for this repo to patch directly, flagged
 separately.
+
+## Fix: `_mvl_struct_alloc`/`_mvl_array_get`/string-creation functions used a handle table instead of real memory (this closed and corrected mvl#2083)
+
+Found the same way as the Option/Result fix above: reverse-engineering `score_guess`'s
+WASM ABI for experiment 010 required reading its actual WAT body. That surfaced:
+
+```wat
+i32.const 16
+call $_mvl_struct_alloc
+local.set $__st
+local.get $__st
+local.get $blacks
+i64.store offset=0        ;; raw store directly on _mvl_struct_alloc's return value
+local.get $__st
+local.get $whites
+i64.store offset=8
+```
+
+`_mvl_struct_alloc`'s return value is **not** an opaque handle the compiled module
+hands back to JS to interpret — the module itself does raw `i64.store`/`i64.load` on
+it. It has to be a real address in the shared linear memory. Same pattern confirmed
+for two more import functions by reading their call sites: `_mvl_array_get` (used by
+`for x in [array literal]` loops — `call $_mvl_array_get` / `i64.load offset=0`) and
+every string-*creating* function (`_mvl_string_new/concat/substring/to_upper/
+to_lower/trim/replace` — `s.concat(s)` compiles to `call $_mvl_string_concat` /
+`i32.load offset=0` (ptr) / `i32.load offset=4` (len), an 8-byte `{ptr, len}`
+descriptor record in memory, not a handle).
+
+This harness's `mvl-runtime.js` used the same handle-table pattern (a shared
+`nextHandle` counter) for **all** `_mvl_*_alloc`/`_mvl_*_new`-style functions,
+correct for the ones only ever read back through another runtime *function call*
+(`_mvl_option_value_i64`, `_mvl_array_get_option_i64`, etc. — genuinely fine as JS
+Map keys) but wrong for these three, whose return values the compiled module
+dereferences directly as memory addresses. A handle like `3` used as a raw address
+corrupts real module memory — those low addresses overlap static rodata and other
+live data in any nontrivial module.
+
+**This is what #2083 actually was.** `actor_trading`'s `main.wat` calls
+`$_mvl_struct_alloc` 18 times (`Order` and `Fill` are both structs) — this harness
+had been running that test against a broken allocator for the entire time the crash
+was diagnosed and filed as an "actor message routing" compiler bug. After this fix:
+no crash, full run to completion, output values matching native exactly. **Issue
+closed with a correcting comment** — see the commit/PR for the link. Own the
+mistake: should have ruled out the harness's own allocator more thoroughly before
+filing against the compiler.
+
+**Fixed here**: `_mvl_struct_alloc` and `_mvl_array_get` now use a real bump
+allocator (`bumpAllocScratch`) into the shared `WebAssembly.Memory`, starting at a
+fixed offset (32KB — comfortably above any static rodata a realistically-sized
+example emits, and inside the initial 64KB page so no `memory.grow` is needed for
+typical small examples) and growing memory on demand for larger ones.
+String-creating functions now encode to UTF-8, write the bytes into that same
+scratch space, and return a `{ptr, len}` descriptor pointer instead of a Map handle.
+Never frees (fine for a short-lived test-harness process, not a real GC — documented
+as a limitation, not silently swept under the rug).
+
+**Not fixed here**: `mvl-lang/mvl-playground`'s own `runtime.ts` has the identical
+`_mvl_struct_alloc` handle-table bug (checked directly) — production code, out of
+scope for this repo, flagged separately alongside the Option/Result bug.
+
+## A genuine backend difference: actor console-output ordering is nondeterministic in native, deterministic in WASM
+
+After the fix above, `actor_trading`'s WASM output still doesn't byte-diff clean
+against the checked-in `expected-stdout.txt` — but the reason turned out to be a
+property of the *native* backend, not a WASM defect. Running `mvl run main.mvl`
+three times back to back produces **two different outputs** (confirmed via
+`md5`sum of three consecutive runs: run 1 and run 3 matched, run 2 didn't) — actor
+mailbox draining interleaves nondeterministically with the driving code's own
+`println` calls natively. Running the WASM harness three times back to back
+produces the **same output every time** — the compiled module's actor pump appears
+to run each mailbox fully synchronously in-order, with no interleaving to be
+nondeterministic about.
+
+Practically: comparing WASM output against a single captured native run is not a
+meaningful correctness bar for this actor-based example — the "expected" file itself
+isn't stable. The values are what matter (and they match), not the interleaving
+order. Left `expected-stdout.txt` as originally captured (one valid native ordering
+among several) rather than chase a moving target; `run-tests.sh` will keep reporting
+this specific case as FAIL on ordering, which is now a documented, understood
+non-issue rather than an open question.
 
 ## Usage
 
