@@ -32,7 +32,7 @@ if [ ! -d "$CPY_DIR/.venv" ]; then
   python3 -m venv "$CPY_DIR/.venv"
   "$CPY_DIR/.venv/bin/pip" install --quiet -r "$CPY_DIR/requirements.txt"
 fi
-(cd "$CPY_DIR/python-raw" && ../.venv/bin/componentize-py -d wit -w proxy componentize app -o hello-py-raw.wasm >/dev/null)
+(cd "$CPY_DIR/python-raw" && ../.venv/bin/componentize-py -d wit -w proxy --all-features componentize app -o hello-py-raw.wasm >/dev/null)
 CPY_WASM="$CPY_DIR/python-raw/hello-py-raw.wasm"
 CPY_SIZE=$(human_size "$CPY_WASM")
 ok "componentize-py: artifact=$CPY_SIZE (built successfully)"
@@ -73,7 +73,7 @@ require_port_free 5002 "pyodide leg"
 PYO_PID=$!
 PYO_CS=$(cold_start_ms 5002 / 15)
 kill_and_wait "$PYO_PID"
-pkill -f "leg2a_pyodide_node/harness.js" 2>/dev/null || true
+pkill -f "node harness.js" 2>/dev/null || true
 ok "Pyodide: cold_start=${PYO_CS}ms"
 PYO_CORE_SIZE=$(human_size "$PYO_DIR/node_modules/pyodide/pyodide.asm.wasm" "$PYO_DIR/node_modules/pyodide/python_stdlib.zip")
 
