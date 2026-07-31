@@ -9,7 +9,7 @@
 // few lines: a WasiCtx with stdio inherited, wired into a Linker before
 // instantiation.
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+use wasmtime_wasi::p1::{self, WasiP1Ctx};
 use wasmtime_wasi::WasiCtxBuilder;
 
 const WASM_PATH: &str = concat!(
@@ -28,9 +28,9 @@ fn main() -> anyhow::Result<()> {
     // everything Rust's std::io::stdin() compiles down to) resolves to a
     // real implementation instead of an unsatisfied import. wasm32-wasip1
     // (this guest's target) uses the "preview1" flat-ABI WASI, not the
-    // component-model preview2 — hence `preview1::add_to_linker_sync`, not
+    // component-model preview2 — hence `p1::add_to_linker_sync`, not
     // the crate-root `add_to_linker_sync` (which is preview2/component-only).
-    preview1::add_to_linker_sync(&mut linker, |ctx| ctx)?;
+    p1::add_to_linker_sync(&mut linker, |ctx| ctx)?;
 
     // inherit_stdin()/inherit_stdout()/inherit_stderr(): the guest's fd 0/1/2
     // are wired directly to THIS process's real stdio — genuine fd_read
@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
             if let Some(exit) = e.downcast_ref::<wasmtime_wasi::I32Exit>() {
                 std::process::exit(exit.0);
             }
-            Err(e)
+            Err(e.into())
         }
     }
 }
