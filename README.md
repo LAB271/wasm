@@ -24,6 +24,7 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [006](experiments/006_worker_kill_switch/) | worker_kill_switch | done | `Worker.terminate()` against a genuine infinite loop — is it actually instant? (No — ~2.1s) |
 | [007](experiments/007_custom_runtime_vs_interpreter/) | custom_runtime_vs_interpreter | done | Hand-written 78-line JS runtime shim vs. componentize-py vs. Pyodide — artifact size, cold start, build complexity |
 | [008](experiments/008_mvl_example_wasm_harness/) | mvl_example_wasm_harness | done | Standalone (non-browser) host for `mvl build --backend=wasm` output — found a new actor-routing crash in `actor_trading` (mvl-lang/mvl#2083) |
+| [009](experiments/009_rust_native_host/) | rust_native_host | done | Native Rust host embedding `wasmtime` directly, no HTTP — checks a Medium article's "200µs" claim against true cold start and against its own methodology |
 
 ## Structure
 
