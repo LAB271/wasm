@@ -1,0 +1,12 @@
+{
+  "name": "mastermind-engine-as",
+  "private": true,
+  "description": "Dev-only: AssemblyScript compiler for the AssemblyScript mastermind scoring engine.",
+  "devDependencies": {
+    "assemblyscript": "^0.27.31"
+  },
+  "scripts": {
+    "build": "asc --config asconfig.json --target release",
+    "build:debug": "asc --config asconfig.json --target debug"
+  }
+}

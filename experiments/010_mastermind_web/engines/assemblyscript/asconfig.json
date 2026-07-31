@@ -1,0 +1,19 @@
+{
+  "entries": ["assembly/index.ts"],
+  "targets": {
+    "release": {
+      "outFile": "../../web/engine-as.wasm",
+      "optimizeLevel": 3,
+      "runtime": "stub",
+      "noAssert": true
+    },
+    "debug": {
+      "outFile": "../../web/engine-as.debug.wasm",
+      "runtime": "stub",
+      "debug": true
+    }
+  },
+  "options": {
+    "exportRuntime": false
+  }
+}

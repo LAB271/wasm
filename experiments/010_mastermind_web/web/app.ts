@@ -1,21 +1,13 @@
-// app.ts — Mastermind, scored entirely by a WASM module compiled from
-// mvl-lang/mvl/examples/mastermind/code.mvl (pure, total, zero-effect MVL
-// source — see vendor/code.mvl and README.md for exactly what was kept,
-// what was excluded, and why).
+// app.ts — Mastermind, scored entirely by a WASM module. score_guess() is a
+// pure function (blacks/whites in, packed int out) with no host imports at
+// all, so loading it is just `WebAssembly.instantiate(bytes, {})` — no
+// runtime shim, no linear-memory bookkeeping.
 //
-// Two compiler bugs make this file's design what it is, not incidentally:
-//   - parse_guess/render_code trap on call (`unreachable` — "contained
-//     unsupported constructs") -> the UI is click-to-pick colored pegs,
-//     never free-text input, so parse_guess is simply never needed.
-//   - render_feedback fails to assemble at all (undefined
-//     $mvl_int_to_string) -> blacks/whites are rendered as pegs directly
-//     from the raw Feedback struct fields, never as a formatted string.
-import { createMvlRuntime } from "./mvl-runtime.js";
+// Two engines compile to the same ABI (engines/rust, engines/assemblyscript)
+// and either can be loaded via ?engine=rust|as (default rust) — see README.md.
 
 interface WasmExports {
-  score_guess(secretHandle: number, guessHandle: number): number;
-  color_name(n: bigint): [number, number];
-  memory?: WebAssembly.Memory;
+  score_guess(s0: number, s1: number, s2: number, s3: number, g0: number, g1: number, g2: number, g3: number): number;
 }
 
 interface Feedback {
@@ -25,15 +17,14 @@ interface Feedback {
 
 const CODE_LENGTH = 4;
 const COLORS = [1, 2, 3, 4, 5, 6];
+const COLOR_NAMES = ["Red", "Green", "Blue", "Yellow", "Orange", "Purple"];
 const MAX_ATTEMPTS = 10;
 
 let wasmExports: WasmExports;
-let wasmMemory: WebAssembly.Memory;
-let runtimeHandles: ReturnType<typeof createMvlRuntime>["runtime"];
 
 let secret: number[] = [];
 let currentGuess: number[] = [];
-let history: { guess: number[]; feedback: Feedback }[] = [];
+let guesses: { guess: number[]; feedback: Feedback }[] = [];
 let gameOver = false;
 
 const boardEl = document.getElementById("board") as HTMLElement;
@@ -50,38 +41,27 @@ const overlayTitleEl = document.getElementById("overlay-title") as HTMLElement;
 const overlayBodyEl = document.getElementById("overlay-body") as HTMLElement;
 const overlayBtn = document.getElementById("overlay-btn") as HTMLButtonElement;
 
+function engineName(): "rust" | "as" {
+  return new URLSearchParams(location.search).get("engine") === "as" ? "as" : "rust";
+}
+
 async function loadWasm(): Promise<void> {
-  const { memory, runtime } = createMvlRuntime();
-  const bytes = await fetch("code.wasm").then((r) => r.arrayBuffer());
-  const { instance } = await WebAssembly.instantiate(bytes, { runtime });
+  const bytes = await fetch(`engine-${engineName()}.wasm`).then((r) => r.arrayBuffer());
+  const { instance } = await WebAssembly.instantiate(bytes, {});
   wasmExports = instance.exports as unknown as WasmExports;
-  wasmMemory = (instance.exports.memory as WebAssembly.Memory | undefined) ?? memory;
-  runtimeHandles = runtime;
 }
 
-function makeArrayHandle(values: number[]): number {
-  const h = runtimeHandles._mvl_array_new(8, values.length);
-  for (const v of values) runtimeHandles._mvl_array_push_i64(h, BigInt(v));
-  return h;
-}
-
-// The one call that matters: hands two arrays to the compiled WASM module
-// and reads back a Feedback struct written directly into linear memory
-// (blacks at +0, whites at +8 — see README.md for how this ABI was
-// reverse-engineered from score_guess's actual WAT body).
+// The one call that matters: colors are 1-6 in the UI, but the wasm ABI
+// uses 0-5, and blacks/whites come back packed as `blacks * 16 + whites`.
 function scoreGuess(secretCode: number[], guess: number[]): Feedback {
-  const secretHandle = makeArrayHandle(secretCode);
-  const guessHandle = makeArrayHandle(guess);
-  const fbPtr = wasmExports.score_guess(secretHandle, guessHandle);
-  const dv = new DataView(wasmMemory.buffer);
-  const blacks = Number(dv.getBigInt64(fbPtr + 0, true));
-  const whites = Number(dv.getBigInt64(fbPtr + 8, true));
-  return { blacks, whites };
+  const [s0, s1, s2, s3] = secretCode.map((c) => c - 1);
+  const [g0, g1, g2, g3] = guess.map((c) => c - 1);
+  const packed = wasmExports.score_guess(s0, s1, s2, s3, g0, g1, g2, g3);
+  return { blacks: Math.floor(packed / 16), whites: packed % 16 };
 }
 
 function colorName(n: number): string {
-  const [ptr, len] = wasmExports.color_name(BigInt(n));
-  return new TextDecoder().decode(new Uint8Array(wasmMemory.buffer, ptr, len));
+  return COLOR_NAMES[n - 1];
 }
 
 function randomSecret(): number[] {
@@ -164,8 +144,8 @@ function renderRow(index: number, guess: number[], feedback: Feedback | null): v
 
 function renderBoard(): void {
   boardEl.innerHTML = "";
-  history.forEach((h, i) => renderRow(i, h.guess, h.feedback));
-  attemptCountEl.textContent = String(history.length);
+  guesses.forEach((h, i) => renderRow(i, h.guess, h.feedback));
+  attemptCountEl.textContent = String(guesses.length);
 }
 
 function showOverlay(won: boolean): void {
@@ -173,7 +153,7 @@ function showOverlay(won: boolean): void {
   overlayTitleEl.textContent = won ? "Cracked it!" : "Out of attempts";
   overlayTitleEl.className = won ? "win" : "lose";
   overlayBodyEl.textContent = won
-    ? `Solved in ${history.length} ${history.length === 1 ? "guess" : "guesses"}. The secret was ${secret.map(colorName).join(", ")}.`
+    ? `Solved in ${guesses.length} ${guesses.length === 1 ? "guess" : "guesses"}. The secret was ${secret.map(colorName).join(", ")}.`
     : `The secret was ${secret.map(colorName).join(", ")}.`;
 }
 
@@ -185,7 +165,7 @@ function submitGuess(): void {
   if (gameOver || currentGuess.length !== CODE_LENGTH) return;
   const guess = [...currentGuess];
   const feedback = scoreGuess(secret, guess); // <- the WASM call
-  history.push({ guess, feedback });
+  guesses.push({ guess, feedback });
   currentGuess = [];
   renderBoard();
   renderCurrentGuess();
@@ -193,7 +173,7 @@ function submitGuess(): void {
   if (feedback.blacks === CODE_LENGTH) {
     gameOver = true;
     showOverlay(true);
-  } else if (history.length >= MAX_ATTEMPTS) {
+  } else if (guesses.length >= MAX_ATTEMPTS) {
     gameOver = true;
     showOverlay(false);
   }
@@ -202,7 +182,7 @@ function submitGuess(): void {
 function newGame(): void {
   secret = randomSecret();
   currentGuess = [];
-  history = [];
+  guesses = [];
   gameOver = false;
   hideOverlay();
   renderBoard();
@@ -222,7 +202,7 @@ async function main(): Promise<void> {
 
   try {
     await loadWasm();
-    engineStatusEl.textContent = "wasm ready";
+    engineStatusEl.textContent = `wasm ready (${engineName()})`;
     engineStatusEl.className = "ready";
     renderPalette();
     newGame();

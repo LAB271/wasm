@@ -5,6 +5,7 @@
 <title>Mastermind — WASM</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="stylesheet" href="style.css" />
+<link rel="icon" href="data:," />
 </head>
 <body>
   <main>
@@ -12,9 +13,9 @@
       <h1>MASTERMIND<span class="wasm-badge">WASM</span></h1>
       <p class="tagline">
         Scoring runs entirely in a compiled <code>.wasm</code> module — every guess calls
-        <code>score_guess()</code>, a pure <code>total fn</code> transpiled straight from
-        <a href="https://github.com/mvl-lang/mvl/tree/main/examples/mastermind" target="_blank" rel="noopener">MVL source</a>,
-        no server round-trip.
+        a pure <code>score_guess()</code> export, no server round-trip. Two interchangeable
+        engines (Rust and AssemblyScript) compile to the same ABI — pick one with
+        <code>?engine=rust</code> or <code>?engine=as</code>.
       </p>
     </header>
 
