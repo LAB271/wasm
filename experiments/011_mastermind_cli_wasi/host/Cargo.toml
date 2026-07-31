@@ -9,5 +9,5 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.104"
-wasmtime = "27"
-wasmtime-wasi = "27"
+wasmtime = "36"
+wasmtime-wasi = "36"
