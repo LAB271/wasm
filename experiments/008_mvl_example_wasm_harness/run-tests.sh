@@ -10,6 +10,17 @@
 set -uo pipefail  # not -e: a failing test case is an expected, reported outcome, not a script error
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# Every other experiment in this repo installs its own deps from build.sh —
+# this one didn't, and it showed: verified from throwaway worktrees that
+# already had `npm install` run in them, never from a genuinely fresh
+# `git clone`/`git pull`, which is exactly how this was first actually used
+# for real and immediately failed with ERR_MODULE_NOT_FOUND.
+if [ ! -d harness/node_modules ]; then
+  echo "→ Installing harness dependencies (first run)..."
+  (cd harness && npm install --no-audit --no-fund >/dev/null)
+  echo
+fi
+
 FAIL=0
 for dir in test-cases/*/; do
   name="$(basename "$dir")"
