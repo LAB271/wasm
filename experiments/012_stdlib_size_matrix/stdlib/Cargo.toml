@@ -1,0 +1,26 @@
+[package]
+name = "mvl-stdlib"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["full"]
+full = ["strings", "unicode", "collections", "math", "random", "time", "io", "json"]
+strings = []
+unicode = ["strings"]
+collections = []
+math = []
+random = []
+time = []
+io = []
+json = []
+all-no-unicode = ["strings", "collections", "math", "random", "time", "io", "json"]
+
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = false  # Controlled per-leg
