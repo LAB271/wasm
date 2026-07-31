@@ -84,6 +84,53 @@ not in a call to the JS runtime.
 
 **Filed as [mvl-lang/mvl#2083](https://github.com/mvl-lang/mvl/issues/2083).** New bug, not a duplicate — checked all three related issues before filing.
 
+## Fix: Option/Result tag polarity was inverted (found while building experiment 010)
+
+While building experiment 010 (mastermind_web), reverse-engineering the WASM ABI
+for a struct-returning function required reading the compiler's actual WAT output
+for a trivial probe (`xs.get(i).unwrap_or(dflt)`). That surfaced the compiled code:
+
+```wat
+call $_mvl_option_tag
+i32.eqz
+if (result i64)          ;; taken when tag == 0
+  call $_mvl_option_value_i64
+else                      ;; taken when tag != 0
+  local.get $dflt
+end
+```
+
+`i32.eqz` branches on `tag == 0`, and that branch is the one that reads the value —
+so the compiler's real convention is **0 = Some/Ok (has a value), 1 = None/Err**.
+
+This harness's `mvl-runtime.js` (and, checked directly, `mvl-lang/mvl-playground`'s
+actual production `web/src/runtime/mvl-runtime.ts`, lines 236-238 and 304 at the time
+of writing) had it backwards: `_mvl_option_some_i64/i32` stored tag `1`,
+`_mvl_option_none` stored tag `0`, `_mvl_array_get_option_i64/i32` and
+`_mvl_map_get_si64` used found=`1`/not-found=`0`, and the equivalent Result
+functions (`_mvl_result_ok_*`/`_mvl_result_err_str`, used by
+`_mvl_string_parse_int`) had the same inversion.
+
+**Effect: silently wrong values, not a crash.** A present element compared as
+absent (falling through to the `unwrap_or` default) and vice versa — for
+`.get(i).unwrap_or(...)`, map lookups, and `String.parse_int()` alike. Verified
+both directions empirically with isolated single-function probes
+(`xs.get(i).unwrap_or(dflt)` and `s.parse_int().unwrap_or(dflt)`) before and after
+the fix, not assumed from reading code.
+
+**Fixed here**: flipped the tag argument in every `storeOption`/`storeResult` call
+in `harness/mvl-runtime.js`, including the `?? 0` fallback in `_mvl_option_tag`/
+`_mvl_result_tag` (now `?? 1`, so a missing/invalid handle fails safe to
+None/Err instead of defaulting to Some/Ok).
+
+**Regression test**: `test-cases/option_probe/` — a minimal `.get().unwrap_or()`
+program that fails (both directions) against the pre-fix runtime and passes
+against the fix (verified both ways via `git stash` before committing).
+
+**Not fixed here**: `mvl-lang/mvl-playground`'s own `runtime.ts` has the identical
+bug and is production code — out of scope for this repo to patch directly, flagged
+separately.
+
 ## Usage
 
 ```bash
