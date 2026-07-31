@@ -1,15 +1,29 @@
-.PHONY: deps build build-js build-py build-rust build-as test bench bench-quick clean help
+.PHONY: help deps build build-js build-py build-rust build-as run test bench bench-quick clean
+
+.DEFAULT_GOAL := help
 
 CONTAINER_CMD ?= $(shell command -v podman 2>/dev/null || echo docker)
 GIT_ROOT      := $(shell git rev-parse --show-toplevel)
 VENV          := $(GIT_ROOT)/.venv
 ACTIVATE      := . $(VENV)/bin/activate &&
 BUILD_DIR     := build
+PORT          ?= 5030
+WASM_LANG     ?= rust
+
+help: ## Show this help
+	@echo ""
+	@awk 'BEGIN {FS = ":.*?## "} \
+	  /^# === .* ===$$/  { sub(/^# === /, ""); sub(/ ===$$/, ""); printf "\n\033[33m%s\033[0m\n", $$0 } \
+	  /^[a-zA-Z0-9_-]+:.*?## / { printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2 }' \
+	  $(MAKEFILE_LIST)
+	@echo ""
 
 $(VENV)/bin/activate: requirements.txt
 	uv venv --clear $(VENV)
 	uv pip install --quiet -r requirements.txt
 	@touch $(VENV)/bin/activate
+
+# === Setup ===
 
 deps: $(VENV)/bin/activate  ## Install toolchain dependencies (spin, componentize-py, hey)
 	@echo "→ Installing Spin..."
@@ -17,6 +31,8 @@ deps: $(VENV)/bin/activate  ## Install toolchain dependencies (spin, componentiz
 	@echo "→ Installing hey (HTTP load generator)..."
 	brew install hey
 	@echo "✓ deps ready  (componentize-py in $(VENV); JS deps fetched at build time by spin build)"
+
+# === Build ===
 
 build: build-js build-py build-rust build-as  ## Compile all sources to .wasm → build/
 	@echo "✓ All .wasm artifacts in $(BUILD_DIR)/"
@@ -48,6 +64,13 @@ build-as:  ## Build AssemblyScript → .wasm (asc + wasm-tools)
 	@mkdir -p $(BUILD_DIR)
 	cp as-hello/build/hello-as.wasm $(BUILD_DIR)/hello-as.wasm
 
+# === Run ===
+
+run: build ## Serve one leg standalone via wasmtime (vars: WASM_LANG=rust|as, PORT=5030) -- js/py legs need containers/venv, see `make bench`
+	wasmtime serve -S cli --addr "127.0.0.1:$(PORT)" $(BUILD_DIR)/hello-$(WASM_LANG).wasm
+
+# === Test ===
+
 test:  ## Run BATS unit tests
 	bats tests/
 
@@ -56,6 +79,8 @@ bench:  ## Run full 7-leg benchmark
 
 bench-quick:  ## Quick benchmark (10 requests)
 	HEY_N=10 ./benchmark.sh
+
+# === Clean ===
 
 clean:  ## Remove build artifacts
 	rm -rf $(BUILD_DIR)
@@ -66,6 +91,3 @@ clean:  ## Remove build artifacts
 	rm -rf rust-hello/target
 	rm -rf as-hello/node_modules as-hello/build
 	$(CONTAINER_CMD) rmi -f hello-js-spin hello-py-spin 2>/dev/null || true
-
-help:  ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
