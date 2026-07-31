@@ -1,0 +1,20 @@
+[package]
+name = "unicode-lib"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["embedded"]
+embedded = []      # Full Unicode tables in WASM
+host = []          # Delegate to JS host
+ascii = []         # ASCII-only fallback
+
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1

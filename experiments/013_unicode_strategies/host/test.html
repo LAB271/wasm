@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unicode Strategies Test</title>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --fg: #eaeaea;
+      --accent: #00d4ff;
+      --success: #00ff88;
+      --error: #ff4444;
+      --muted: #666;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      background: var(--bg);
+      color: var(--fg);
+      padding: 2rem;
+      line-height: 1.6;
+    }
+
+    h1 {
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    .test-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .leg {
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .leg h2 {
+      font-size: 0.9rem;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+
+    .leg .size {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .test-case {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .test-case:last-child {
+      border-bottom: none;
+    }
+
+    .test-case .name {
+      color: var(--muted);
+    }
+
+    .test-case .result {
+      font-weight: bold;
+    }
+
+    .test-case .result.pass {
+      color: var(--success);
+    }
+
+    .test-case .result.fail {
+      color: var(--error);
+    }
+
+    .summary {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    th {
+      color: var(--accent);
+    }
+
+    .loading {
+      color: var(--muted);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <h1>Experiment 013: Unicode Strategies</h1>
+  <p>Comparing embedded tables vs host delegation vs ASCII-only.</p>
+
+  <div class="test-grid" id="results">
+    <p class="loading">Loading WASM modules...</p>
+  </div>
+
+  <div class="summary" id="summary" style="display: none;">
+    <h2>Size Comparison</h2>
+    <table id="size-table">
+      <thead>
+        <tr>
+          <th>Leg</th>
+          <th>Strategy</th>
+          <th>.wasm size</th>
+          <th>Tests passed</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script type="module">
+    import { createUnicodeLib, createImports } from './unicode_bridge.js';
+
+    const TEST_CASES = [
+      { name: 'ASCII upper', fn: lib => lib.toUpper('hello'), expected: 'HELLO' },
+      { name: 'ASCII lower', fn: lib => lib.toLower('HELLO'), expected: 'hello' },
+      { name: 'Latin-1 upper', fn: lib => lib.toUpper('café'), expected: 'CAFÉ' },
+      { name: 'Greek upper', fn: lib => lib.toUpper('αβγ'), expected: 'ΑΒΓ' },
+      { name: 'Cyrillic upper', fn: lib => lib.toUpper('абв'), expected: 'АБВ' },
+      { name: 'Whitespace space', fn: lib => lib.isWhitespace(' '), expected: true },
+      { name: 'Whitespace NBSP', fn: lib => lib.isWhitespace(' '), expected: true },
+      { name: 'Char count ASCII', fn: lib => lib.charCount('hello'), expected: 5 },
+      { name: 'Char count UTF-8', fn: lib => lib.charCount('héllo'), expected: 5 },
+      { name: 'Char count CJK', fn: lib => lib.charCount('日本語'), expected: 3 },
+    ];
+
+    const LEGS = [
+      { id: 'leg1', name: 'Leg 1: Embedded Tables', wasm: '../legs/leg1_embedded/output.wasm' },
+      { id: 'leg2', name: 'Leg 2: Host Delegation', wasm: '../legs/leg2_host_js/output.wasm' },
+      { id: 'leg3', name: 'Leg 3: ASCII Only', wasm: '../legs/leg3_ascii_only/output.wasm' },
+      { id: 'leg4', name: 'Leg 4: ASCII No Import', wasm: '../legs/leg4_ascii_no_import/output.wasm' },
+    ];
+
+    async function runTests() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '';
+
+      const summaryData = [];
+
+      for (const leg of LEGS) {
+        const legDiv = document.createElement('div');
+        legDiv.className = 'leg';
+        legDiv.innerHTML = `<h2>${leg.name}</h2><div class="size">Loading...</div>`;
+        resultsDiv.appendChild(legDiv);
+
+        try {
+          const response = await fetch(leg.wasm);
+          if (!response.ok) {
+            throw new Error(`Failed to load: ${response.status}`);
+          }
+
+          const bytes = await response.arrayBuffer();
+          const size = bytes.byteLength;
+          legDiv.querySelector('.size').textContent = `Size: ${(size / 1024).toFixed(2)} KB`;
+
+          let lib;
+          if (leg.id === 'leg2') {
+            // Host delegation needs special instantiation
+            const memory = new WebAssembly.Memory({ initial: 2 });
+            const imports = createImports(memory);
+            imports.env.memory = memory;
+            const { instance } = await WebAssembly.instantiate(bytes, imports);
+            lib = new (await import('./unicode_bridge.js')).UnicodeLib(instance, memory);
+          } else {
+            // Self-contained modules
+            const { instance } = await WebAssembly.instantiate(bytes, {});
+            // Create a simple wrapper
+            const memory = instance.exports.memory || new WebAssembly.Memory({ initial: 1 });
+            lib = new (await import('./unicode_bridge.js')).UnicodeLib(instance, memory);
+          }
+
+          let passed = 0;
+          let total = 0;
+
+          for (const test of TEST_CASES) {
+            total++;
+            const testDiv = document.createElement('div');
+            testDiv.className = 'test-case';
+
+            try {
+              const result = test.fn(lib);
+              const pass = result === test.expected;
+              if (pass) passed++;
+
+              testDiv.innerHTML = `
+                <span class="name">${test.name}</span>
+                <span class="result ${pass ? 'pass' : 'fail'}">${pass ? '✓' : `✗ (${JSON.stringify(result)})`}</span>
+              `;
+            } catch (e) {
+              testDiv.innerHTML = `
+                <span class="name">${test.name}</span>
+                <span class="result fail">✗ ${e.message}</span>
+              `;
+            }
+
+            legDiv.appendChild(testDiv);
+          }
+
+          summaryData.push({ leg: leg.name, size, passed, total });
+
+        } catch (e) {
+          legDiv.innerHTML += `<p class="result fail">Error: ${e.message}</p>`;
+          summaryData.push({ leg: leg.name, size: null, passed: 0, total: TEST_CASES.length });
+        }
+      }
+
+      // Update summary table
+      const tbody = document.querySelector('#size-table tbody');
+      for (const data of summaryData) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${data.leg.split(':')[0]}</td>
+          <td>${data.leg.split(':')[1] || ''}</td>
+          <td>${data.size ? (data.size / 1024).toFixed(2) + ' KB' : '—'}</td>
+          <td>${data.passed}/${data.total}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+      document.getElementById('summary').style.display = 'block';
+    }
+
+    runTests().catch(e => {
+      document.getElementById('results').innerHTML = `<p class="result fail">Error: ${e.message}</p>`;
+    });
+  </script>
+</body>
+</html>
