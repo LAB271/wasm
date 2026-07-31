@@ -1,0 +1,13 @@
+[package]
+name = "mastermind-host"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mastermind-host"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+wasmtime = "27"
+wasmtime-wasi = "27"

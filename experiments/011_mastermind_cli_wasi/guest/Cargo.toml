@@ -1,0 +1,12 @@
+[package]
+name = "mastermind-guest"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mastermind-guest"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "s"
+panic = "abort"
