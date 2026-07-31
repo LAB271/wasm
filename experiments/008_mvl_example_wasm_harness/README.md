@@ -191,9 +191,10 @@ Practically: comparing WASM output against a single captured native run is not a
 meaningful correctness bar for this actor-based example — the "expected" file itself
 isn't stable. The values are what matter (and they match), not the interleaving
 order. Left `expected-stdout.txt` as originally captured (one valid native ordering
-among several) rather than chase a moving target; `run-tests.sh` will keep reporting
-this specific case as FAIL on ordering, which is now a documented, understood
-non-issue rather than an open question.
+among several) rather than chase a moving target; `run-tests.sh` falls back to a
+sorted-line comparison when the exact-sequence diff fails, so this case reports
+PASS (with the order-only diff still printed for visibility) instead of failing on
+a difference that isn't a defect.
 
 ## Usage
 

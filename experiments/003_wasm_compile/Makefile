@@ -20,7 +20,7 @@ help: ## Show this help
 
 $(VENV)/bin/activate: requirements.txt
 	uv venv --clear $(VENV)
-	uv pip install --quiet -r requirements.txt
+	uv pip install --quiet --python $(VENV)/bin/python3 -r requirements.txt
 	@touch $(VENV)/bin/activate
 
 # === Setup ===
@@ -60,7 +60,7 @@ build-rust:  ## Build Rust → .wasm (cargo wasm32-wasip2)
 
 build-as:  ## Build AssemblyScript → .wasm (asc + wasm-tools)
 	@echo "→ Building AssemblyScript (asc + wasm-tools)..."
-	cd as-hello && npm ci --silent && ./build.sh
+	cd as-hello && npm install --silent && ./build.sh
 	@mkdir -p $(BUILD_DIR)
 	cp as-hello/build/hello-as.wasm $(BUILD_DIR)/hello-as.wasm
 
