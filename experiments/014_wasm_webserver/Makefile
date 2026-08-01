@@ -60,7 +60,7 @@ test-b: build-b ## Test Leg B
 	@curl -s http://127.0.0.1:3000/health | jq -e '.status == "ok"'
 	@curl -s http://127.0.0.1:3000/records | jq -e 'length == 5'
 	@curl -s http://127.0.0.1:3000/records/1 | jq -e '.name == "Alice"'
-	@pkill -f spin || true
+	@pkill -f "spin up" 2>/dev/null || true
 	@echo "Leg B: PASS"
 
 # === Benchmark ===
