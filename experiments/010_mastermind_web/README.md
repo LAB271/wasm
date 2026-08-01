@@ -88,6 +88,96 @@ and asserts feedback pegs render correctly with zero console errors.
     # engine-rust.wasm, engine-as.wasm, dist/ are build output, gitignored
 ```
 
+## WASM Size Optimization — A Case Study
+
+For trivial functions, WASM binary size varies dramatically by language and build
+configuration. This experiment documents the journey from 16KB to 950 bytes for
+the same Rust function:
+
+| Configuration | Size | Notes |
+|---------------|------|-------|
+| Rust default (`std`) | 16 KB | Includes panic handling, allocator stubs, LLVM glue |
+| Rust `#![no_std]` | 3.1 KB | Removes stdlib, requires custom panic handler |
+| Rust `#![no_std]` + `wasm-opt -Oz` | **950 B** | Binaryen optimizer strips dead code |
+| AssemblyScript | **481 B** | Designed for WASM, near 1:1 compilation |
+
+### Why the difference?
+
+**Rust** compiles via LLVM, a general-purpose backend. Even with aggressive
+optimization flags (`opt-level = "z"`, LTO, `panic = "abort"`, `strip = true`),
+a minimal `std` binary includes:
+- Panic handling infrastructure (unwinding or abort stubs)
+- Memory allocator shims (even if unused)
+- LLVM-generated defensive code paths
+
+**AssemblyScript** is purpose-built for WASM. The language maps directly to WASM
+primitives — no runtime overhead, no hidden allocators. For pure compute
+functions like `score_guess`, this is nearly 1:1 with hand-written WAT.
+
+### How to minimize Rust WASM size
+
+1. **Use `#![no_std]`** — eliminates stdlib overhead (requires panic handler):
+   ```rust
+   #![no_std]
+   
+   #[cfg(target_arch = "wasm32")]
+   #[panic_handler]
+   fn panic(_: &core::panic::PanicInfo) -> ! {
+       loop {}
+   }
+   ```
+
+2. **Cargo.toml release profile**:
+   ```toml
+   [profile.release]
+   opt-level = "z"      # optimize for size
+   lto = true           # link-time optimization
+   panic = "abort"      # no unwinding
+   strip = true         # strip symbols
+   ```
+
+3. **Post-process with `wasm-opt`** (from Binaryen):
+   ```bash
+   wasm-opt -Oz input.wasm -o output.wasm
+   ```
+
+### When does this matter?
+
+- **Browser apps** — every KB counts for initial load time
+- **Edge/serverless** — cold start includes WASM compilation
+- **Embedded** — memory constraints are real
+
+For **server-side WASM** with `std` (file I/O, networking, serde), the 16KB
+overhead amortizes against 100KB+ of actual application code. Don't sacrifice
+ergonomics for size when size doesn't matter.
+
+## Solver Strategies
+
+The app includes an integrated solver demonstrating classic Mastermind algorithms:
+
+| Strategy | Average | Worst | Description |
+|----------|---------|-------|-------------|
+| Koyama & Lai (1993) | 4.34 | 5 | Minimizes expected remaining possibilities |
+| Knuth minimax (1977) | 4.48 | 5 | Minimizes worst-case remaining possibilities |
+| Entropy | 4.42 | 5 | Maximizes Shannon information gain |
+| Static (pairs/mono) | fails | fails | Non-adaptive, demonstrates why adaptation matters |
+| Memory-1 | ~4.5 | 5 | Only remembers last guess — bounded memory |
+
+Select a strategy from the dropdown and click "Solve" to watch it crack the code.
+
+## REST API
+
+The server exposes endpoints for CLI play:
+
+```bash
+# Start a new game
+curl -X POST http://localhost:8010/api/new
+
+# Make a guess (colors 1-6: R,G,B,Y,O,P)
+curl -X POST http://localhost:8010/api/guess -d '{"guess":[1,1,2,2]}'
+# Returns: {"blacks": 1, "whites": 0, "attempts": 1, "won": false, ...}
+```
+
 ## What this builds on
 
 - Experiment 004's static-page-delivery pattern (`python3 serve.py`, no backend
