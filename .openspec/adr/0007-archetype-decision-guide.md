@@ -11,7 +11,7 @@
 | Archetype | ADR | Host | Guest target | Real stdin? | Cheapest measured artifact | Cheapest measured cold start |
 |---|---|---|---|---|---|---|
 | Browser Worker + WASI shim | [0002](0002-archetype-browser-worker-wasi-shim.md) | Static page + Web Worker | `wasm32-wasip1` | No (emulated syscalls, no terminal) | 39.4KB | 22.7ms (median) |
-| Custom hand-rolled ABI | [0003](0003-archetype-custom-hand-rolled-abi.md) | Any JS host (browser or Node, same shape) | `wasm32-unknown-unknown` or MVL's backend | No — 008 wires WASI for stdout/stderr only; MVL's backend has no `fd_read` path at all | **302 bytes** | **0.28ms** |
+| Custom hand-rolled ABI | [0003](0003-archetype-custom-hand-rolled-abi.md) | Any JS host (browser or Node, same shape) | `wasm32-unknown-unknown` | No — 008 wires WASI for stdout/stderr only | **302 bytes** | **0.28ms** |
 | Pre-built server / HTTP black box | [0004](0004-archetype-prebuilt-server-http-blackbox.md) | `wasmtime serve` / `spin up` (off-the-shelf) | `wasi:http/incoming-handler` component | N/A (HTTP, not a terminal) | not yet measured (001/003 both "results pending") | not yet measured |
 | Embedded runtime as a library | [0005](0005-archetype-embedded-runtime-library.md) | Native binary linking `wasmtime` | `wasm32-unknown-unknown` or `wasm32-wasip1` | **Yes — the only archetype proven genuinely interactive** | N/A (not artifact-size focused) | 4ms warm-cache / 190ms true cold |
 | Interpreter-in-WASM | [0006](0006-archetype-interpreter-in-wasm.md) | Node, or headless Chromium | N/A — ships CPython, not your program | No (source, not a terminal session) | 11.9MB | 845ms |
@@ -53,18 +53,47 @@ flowchart TD
     q5 -->|no| a3["Custom hand-rolled ABI (0003)<br/>smallest footprint, but YOU own<br/>the memory-safety contract"]
 ```
 
-## The one cross-cutting lesson
+## The one cross-cutting lesson: the boundary layer matters
 
-Every archetype except [0006](0006-archetype-interpreter-in-wasm.md) (which sidesteps
-the question entirely by not compiling the guest's own code at all) puts a real
-weight-bearing wall between guest and host: a WASI shim (0002), a hand-rolled ABI
-(0003), a Component Model world (0004), or an explicitly-wired `WasiCtx` (0005).
-**This repo found three genuinely shipped, previously-undetected memory-safety
-bugs at exactly one of those walls** — the custom-ABI boundary in
-[0003](0003-archetype-custom-hand-rolled-abi.md) — and one of them had already
-been misfiled as a compiler defect before being traced back to the wall itself.
-No archetype here is free of that risk class; 0003 is simply the one with no
-framework standing between a mistake and a shipped bug. Choosing an archetype is
-partly a question of who is willing to own that wall: a browser vendor's WASI
-implementation, the Bytecode Alliance's component tooling, `wasmtime`'s own
-crate — or you.
+Every archetype puts a **boundary layer** between guest WASM and host — this is
+where data crosses: strings, structs, function calls. Someone has to implement
+that boundary correctly, and that someone varies by archetype:
+
+| Archetype | Who implements the boundary | Who tests it |
+|-----------|----------------------------|--------------|
+| 0002 (Browser WASI shim) | Browser vendor / @aspect-build | They do |
+| 0003 (Custom ABI) | **You** | **You do** |
+| 0004 (Spin/wasmtime serve) | Bytecode Alliance | They do |
+| 0005 (Embedded wasmtime) | wasmtime crate | They do |
+| 0006 (Interpreter) | Pyodide / language runtime | They do |
+| 0008 (Guest sockets) | wasmtime + wasi:sockets | They do |
+
+**Why this matters: we found real bugs at this boundary.**
+
+Experiment 008 tested a custom ABI (archetype 0003) and discovered three
+memory-safety bugs in the hand-written JavaScript↔WASM marshalling code:
+
+1. **Handle vs pointer confusion**: The JS runtime returned handle-table indices
+   (small integers), but the guest module used them as raw memory addresses.
+   This corrupts linear memory silently.
+
+2. **Misfiled as a compiler bug**: One crash was initially blamed on the
+   compiler's code generation. It was actually a bug in the boundary layer —
+   the runtime's `_struct_alloc` function.
+
+3. **Silent data disappearance**: String literal data was dropped by dead-code
+   elimination when functions weren't called from `main()`. The boundary layer
+   didn't validate that data segments existed.
+
+These bugs shipped in what appeared to be working code. There was no framework
+to catch them — the entire memory-safety contract was "whatever the hand-written
+runtime.js happened to get right."
+
+**The takeaway**: If you choose archetype 0003 (custom ABI), you own the
+boundary layer. You test it. You debug it. You fix the memory corruption bugs.
+The other archetypes delegate that responsibility to teams who specialize in it.
+This isn't a reason to avoid 0003 — it's the smallest, fastest option — but it's
+a reason to understand what you're signing up for.
+
+See [ADR-0003](0003-archetype-custom-hand-rolled-abi.md) for the full details
+of these bugs and how they were found.

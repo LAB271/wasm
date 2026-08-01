@@ -31,10 +31,10 @@ cargo build --manifest-path unicode-lib/Cargo.toml \
     --features embedded
 
 if [ "$HAS_WASM_OPT" -eq 1 ]; then
-    wasm-opt -Oz target/wasm32-unknown-unknown/release/unicode_lib.wasm \
+    wasm-opt -Oz unicode-lib/target/wasm32-unknown-unknown/release/unicode_lib.wasm \
         -o legs/leg1_embedded/output.wasm
 else
-    cp target/wasm32-unknown-unknown/release/unicode_lib.wasm \
+    cp unicode-lib/target/wasm32-unknown-unknown/release/unicode_lib.wasm \
         legs/leg1_embedded/output.wasm
 fi
 
@@ -55,10 +55,10 @@ cargo build --manifest-path unicode-lib/Cargo.toml \
     --features host
 
 if [ "$HAS_WASM_OPT" -eq 1 ]; then
-    wasm-opt -Oz target/wasm32-unknown-unknown/release/unicode_lib.wasm \
+    wasm-opt -Oz unicode-lib/target/wasm32-unknown-unknown/release/unicode_lib.wasm \
         -o legs/leg2_host_js/output.wasm
 else
-    cp target/wasm32-unknown-unknown/release/unicode_lib.wasm \
+    cp unicode-lib/target/wasm32-unknown-unknown/release/unicode_lib.wasm \
         legs/leg2_host_js/output.wasm
 fi
 
@@ -79,10 +79,10 @@ cargo build --manifest-path unicode-lib/Cargo.toml \
     --features ascii
 
 if [ "$HAS_WASM_OPT" -eq 1 ]; then
-    wasm-opt -Oz target/wasm32-unknown-unknown/release/unicode_lib.wasm \
+    wasm-opt -Oz unicode-lib/target/wasm32-unknown-unknown/release/unicode_lib.wasm \
         -o legs/leg3_ascii_only/output.wasm
 else
-    cp target/wasm32-unknown-unknown/release/unicode_lib.wasm \
+    cp unicode-lib/target/wasm32-unknown-unknown/release/unicode_lib.wasm \
         legs/leg3_ascii_only/output.wasm
 fi
 

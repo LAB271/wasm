@@ -4,6 +4,7 @@
 //! Feature flags control which modules are compiled.
 
 #![no_std]
+#![allow(unused_imports)]
 
 extern crate alloc;
 use alloc::string::String;
@@ -829,46 +830,7 @@ pub mod json {
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// PANIC HANDLER (required for no_std)
-// ══════════════════════════════════════════════════════════════════════════════
-
-#[cfg(not(test))]
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    loop {}
-}
-
-// Global allocator for no_std
-#[cfg(not(test))]
-mod alloc_impl {
-    use core::alloc::{GlobalAlloc, Layout};
-
-    struct BumpAllocator;
-
-    static mut HEAP: [u8; 65536] = [0; 65536];
-    static mut HEAP_PTR: usize = 0;
-
-    unsafe impl GlobalAlloc for BumpAllocator {
-        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-            let align = layout.align();
-            let size = layout.size();
-            let ptr = HEAP_PTR;
-            let aligned = (ptr + align - 1) & !(align - 1);
-            let new_ptr = aligned + size;
-            if new_ptr > HEAP.len() {
-                core::ptr::null_mut()
-            } else {
-                HEAP_PTR = new_ptr;
-                HEAP.as_mut_ptr().add(aligned)
-            }
-        }
-
-        unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-            // Bump allocator doesn't deallocate
-        }
-    }
-
-    #[global_allocator]
-    static ALLOCATOR: BumpAllocator = BumpAllocator;
-}
+// Note: no #[panic_handler]/#[global_allocator] here. This crate is only ever
+// linked in as a dependency of app/ (never built standalone to wasm), and
+// app/src/lib.rs already provides both — defining them here too conflicts
+// with app's definitions (duplicate lang items).

@@ -8,7 +8,9 @@
 #![no_std]
 
 extern crate alloc;
+#[allow(unused_imports)]
 use alloc::string::String;
+#[allow(unused_imports)]
 use alloc::vec::Vec;
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -222,7 +224,8 @@ mod host {
     use alloc::string::String;
     use alloc::vec::Vec;
 
-    // Imports from JS host
+    // Imports from JS host — resolved at WebAssembly.instantiate() time
+    #[link(wasm_import_module = "host")]
     extern "C" {
         /// Convert string to uppercase via host.
         /// Input: (ptr, len) of UTF-8 string
@@ -360,28 +363,37 @@ pub use ascii::*;
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Shared memory for string I/O.
+///
+/// SAFETY: WASM is single-threaded, so static mut is safe here. The warnings
+/// about mutable statics are for multi-threaded scenarios that don't apply.
+#[allow(static_mut_refs)]
 static mut BUFFER: [u8; 4096] = [0; 4096];
 
+const BUFFER_LEN: usize = 4096;
+
 /// Write a string to the shared buffer, returning length.
+#[allow(static_mut_refs)]
 fn write_to_buffer(s: &str) -> usize {
     let bytes = s.as_bytes();
-    let len = bytes.len().min(unsafe { BUFFER.len() });
+    let len = bytes.len().min(BUFFER_LEN);
     unsafe {
-        BUFFER[..len].copy_from_slice(&bytes[..len]);
+        core::ptr::copy_nonoverlapping(bytes.as_ptr(), BUFFER.as_mut_ptr(), len);
     }
     len
 }
 
 /// Read a string from the shared buffer.
+#[allow(static_mut_refs)]
 fn read_from_buffer(len: usize) -> &'static str {
     unsafe {
-        let slice = &BUFFER[..len.min(BUFFER.len())];
+        let slice = core::slice::from_raw_parts(BUFFER.as_ptr(), len.min(BUFFER_LEN));
         core::str::from_utf8_unchecked(slice)
     }
 }
 
 /// Get pointer to shared buffer.
 #[unsafe(no_mangle)]
+#[allow(static_mut_refs)]
 pub extern "C" fn get_buffer_ptr() -> *mut u8 {
     unsafe { BUFFER.as_mut_ptr() }
 }
@@ -431,23 +443,28 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 #[cfg(not(test))]
 mod alloc_impl {
     use core::alloc::{GlobalAlloc, Layout};
+    use core::sync::atomic::{AtomicUsize, Ordering};
 
     struct BumpAllocator;
 
+    /// SAFETY: WASM is single-threaded, but we use atomics to satisfy the
+    /// GlobalAlloc trait which requires thread safety.
     static mut HEAP: [u8; 32768] = [0; 32768];
-    static mut HEAP_PTR: usize = 0;
+    static HEAP_PTR: AtomicUsize = AtomicUsize::new(0);
+    const HEAP_SIZE: usize = 32768;
 
     unsafe impl GlobalAlloc for BumpAllocator {
+        #[allow(static_mut_refs)]
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
             let align = layout.align();
             let size = layout.size();
-            let ptr = HEAP_PTR;
+            let ptr = HEAP_PTR.load(Ordering::Relaxed);
             let aligned = (ptr + align - 1) & !(align - 1);
             let new_ptr = aligned + size;
-            if new_ptr > HEAP.len() {
+            if new_ptr > HEAP_SIZE {
                 core::ptr::null_mut()
             } else {
-                HEAP_PTR = new_ptr;
+                HEAP_PTR.store(new_ptr, Ordering::Relaxed);
                 HEAP.as_mut_ptr().add(aligned)
             }
         }

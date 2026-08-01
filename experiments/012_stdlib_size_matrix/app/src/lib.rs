@@ -4,6 +4,8 @@
 //! Uses the stdlib for string parsing and random number generation.
 
 #![no_std]
+#![allow(static_mut_refs)]
+#![allow(unused_imports)]
 
 extern crate alloc;
 use alloc::string::String;
