@@ -12,7 +12,6 @@ component = "api"
 [component.api]
 source = "target/wasm32-wasip2/release/leg_b_serverless.wasm"
 allowed_outbound_hosts = []
+files = [{ source = "../data", destination = "/" }]
 [component.api.build]
 command = "cargo build --release --target wasm32-wasip2"
-[component.api.files]
-"../data" = "/"
