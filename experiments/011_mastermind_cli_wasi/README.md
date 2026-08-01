@@ -114,12 +114,34 @@ it currently traps on call regardless of where its input comes from (see experim
 limitation; both are specific, addressable gaps in MVL's current WASM backend and
 runtime, demonstrated concretely here rather than asserted.
 
+## Solver — run sideways
+
+`solve.py` is a pure-Python companion tool: play the WASM game (or a physical
+board) in one terminal, run the solver in another. Feed it every guess and its
+feedback; it filters the possibility space and suggests the best next guesses
+ranked by worst-case elimination power.
+
+```bash
+# after round 1: guessed 1 1 2 2, got 1 black 0 white
+python3 solve.py 1 1 2 2 1 0
+
+# after round 2: add the new round's 6 numbers
+python3 solve.py 1 1 2 2 1 0  3 3 4 4 0 1
+
+# or via make
+make solver ARGS="1 1 2 2 1 0  3 3 4 4 0 1"
+```
+
+Each group of 6 numbers is one round: 4 colors (1–6) + blacks + whites.
+Use `-c 8` for 8-color variants, `-p 5` for 5-position boards.
+
 ## Structure
 
 ```
 011_mastermind_cli_wasi/
 ├── README.md
 ├── build.sh
+├── solve.py               # Python solver — run alongside the game
 ├── guest/
 │   ├── Cargo.toml
 │   └── src/main.rs        # the game — real stdin, compiled to wasm32-wasip1

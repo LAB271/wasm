@@ -27,6 +27,11 @@ run: build ## Run the embedded host (reads real stdin interactively)
 test: build ## Non-interactive verification: pipe two guesses through the host
 	printf "1 2 3 4\n2 3 4 5\n" | ./host/target/release/mastermind-host
 
+# === Solver ===
+
+solver: ## Run the Python solver sideways (pass rounds as args: make solver ARGS="1 1 2 2 1 0")
+	python3 solve.py $(ARGS)
+
 # === Clean ===
 
 clean: ## Remove build output
