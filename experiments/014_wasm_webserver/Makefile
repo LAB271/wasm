@@ -66,11 +66,11 @@ test-b: build-b ## Test Leg B
 benchmark: build ## Compare cold start, throughput, memory
 	@echo "=== Cold Start (external wall-clock) ==="
 	@echo "Leg A (TCP):"
-	@time -p (timeout 2 wasmtime run --wasi inherit-network \
+	@bash -c 'time timeout 2 wasmtime run --wasi inherit-network \
 		--env CSV_PATH=data/records.csv \
-		leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm 2>/dev/null || true) 2>&1 | grep real
+		leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm 2>/dev/null; true' 2>&1 | grep -E "^real|^user|^sys" || true
 	@echo "Leg B (Spin):"
-	@time -p (cd leg_b_serverless && timeout 2 spin up --from spin.toml 2>/dev/null || true) 2>&1 | grep real
+	@bash -c 'cd leg_b_serverless && time timeout 2 spin up --from spin.toml 2>/dev/null; true' 2>&1 | grep -E "^real|^user|^sys" || true
 	@echo ""
 	@echo "=== Artifact Size ==="
 	@ls -lh leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm
