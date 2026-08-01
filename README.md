@@ -31,6 +31,29 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [013](experiments/013_unicode_strategies/) | unicode_strategies | done | Compare Unicode handling strategies for WASM string runtime |
 | [014](experiments/014_wasm_webserver/) | wasm_webserver | in progress | TCP vs serverless web server: guest-owned sockets (wasi:sockets) vs host-owned (Spin wasi:http) |
 
+## Key Learnings
+
+### WASM Binary Size Optimization (Experiment 010)
+
+For browser/edge WASM, binary size directly impacts cold start. Rust defaults to
+~16KB for a trivial function; with proper optimization it drops to ~950 bytes:
+
+| Step | Size | Toolchain |
+|------|------|-----------|
+| Rust default (`std`) | 16 KB | Rust/LLVM |
+| `#![no_std]` | 3.1 KB | Rust/LLVM |
+| + `wasm-opt -Oz` | **950 B** | Binaryen |
+| AssemblyScript | **481 B** | Binaryen-native |
+
+**Two-stage optimization:**
+1. **Rust/LLVM** — `#![no_std]`, `opt-level = "z"`, LTO, `panic = "abort"` removes stdlib overhead
+2. **Binaryen** — `wasm-opt -Oz` applies WASM-native dead code elimination, instruction combining
+
+AssemblyScript compiles directly through Binaryen (no LLVM), explaining its smaller baseline.
+For server-side WASM with `std`, the 16KB overhead amortizes against application code.
+
+See [experiments/010_mastermind_web/README.md](experiments/010_mastermind_web/README.md) for details.
+
 ## Structure
 
 ```

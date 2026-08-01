@@ -116,6 +116,15 @@ functions like `score_guess`, this is nearly 1:1 with hand-written WAT.
 
 ### How to minimize Rust WASM size
 
+The optimization happens in two stages — **Rust/LLVM** and **Binaryen/WASM**:
+
+| Step | Reduction | Toolchain | What it does |
+|------|-----------|-----------|--------------|
+| `#![no_std]` | 16KB → 3.1KB | Rust | Removes stdlib, panic infra, allocator |
+| `wasm-opt -Oz` | 3.1KB → 950B | Binaryen | WASM-specific dead code elimination |
+
+**Stage 1: Rust/LLVM** (compile-time)
+
 1. **Use `#![no_std]`** — eliminates stdlib overhead (requires panic handler):
    ```rust
    #![no_std]
@@ -130,16 +139,29 @@ functions like `score_guess`, this is nearly 1:1 with hand-written WAT.
 2. **Cargo.toml release profile**:
    ```toml
    [profile.release]
-   opt-level = "z"      # optimize for size
-   lto = true           # link-time optimization
+   opt-level = "z"      # optimize for size (LLVM)
+   lto = true           # link-time optimization (LLVM)
    panic = "abort"      # no unwinding
    strip = true         # strip symbols
    ```
+
+**Stage 2: Binaryen/WASM** (post-process)
 
 3. **Post-process with `wasm-opt`** (from Binaryen):
    ```bash
    wasm-opt -Oz input.wasm -o output.wasm
    ```
+   
+   Binaryen understands WASM natively and applies transformations LLVM can't:
+   - Dead code elimination (removes unreachable functions)
+   - Instruction combining (merges redundant ops)
+   - Stack/local optimization (WASM-specific register allocation)
+   - Code deduplication
+
+**Why both stages matter:** Rust compiles via LLVM, a general-purpose backend that
+targets WASM but doesn't understand it deeply. Binaryen is WASM-native — it sees
+patterns LLVM misses. AssemblyScript uses Binaryen directly (no LLVM), which is
+why it starts small without needing a separate optimization pass.
 
 ### When does this matter?
 
