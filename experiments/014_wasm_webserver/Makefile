@@ -27,7 +27,8 @@ build-b: ## Build Leg B (serverless handler)
 leg-a: build-a ## Run Leg A: full TCP server via wasmtime
 	@echo "Starting TCP server on :8080..."
 	wasmtime run --wasi inherit-network \
-		--env CSV_PATH=data/records.csv \
+		--dir data::/ \
+		--env CSV_PATH=/records.csv \
 		leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm
 
 leg-b: build-b ## Run Leg B: serverless handler via Spin
@@ -42,7 +43,8 @@ test: test-a test-b ## Test both legs return identical JSON
 test-a: build-a ## Test Leg A
 	@echo "Testing Leg A (TCP)..."
 	@timeout 5 bash -c 'wasmtime run --wasi inherit-network \
-		--env CSV_PATH=data/records.csv \
+		--dir data::/ \
+		--env CSV_PATH=/records.csv \
 		leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm &' || true
 	@sleep 1
 	@curl -s http://127.0.0.1:8080/health | jq -e '.status == "ok"'
@@ -78,7 +80,8 @@ benchmark: build ## Compare cold start, throughput, memory
 	@echo ""
 	@echo "Leg A (TCP) — guest owns socket via wasi:sockets:"
 	@bash -c 'time timeout 2 wasmtime run --wasi inherit-network \
-		--env CSV_PATH=data/records.csv \
+		--dir data::/ \
+		--env CSV_PATH=/records.csv \
 		leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm 2>/dev/null; true' 2>&1 | grep -E "^real|^user|^sys" || true
 	@echo ""
 	@echo "Leg B (Spin) — host owns socket, guest is handler only:"

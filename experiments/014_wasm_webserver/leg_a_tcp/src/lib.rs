@@ -9,7 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,22 +109,24 @@ fn handle_request(db: &Database, request: &str) -> (u16, &'static str, String) {
 }
 
 fn handle_connection(db: &Database, mut stream: TcpStream) {
-    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    // Note: WASI doesn't support TcpStream::try_clone(), so we read into a buffer
+    // first, then write the response. This is less efficient but works on WASI.
+    let mut buf = [0u8; 4096];
     let mut request = String::new();
 
-    // Read headers (until blank line)
-    loop {
-        let mut line = String::new();
-        match reader.read_line(&mut line) {
-            Ok(0) => break,
-            Ok(_) => {
-                if line == "\r\n" || line == "\n" {
-                    break;
+    // Read request (simple approach: read once, parse what we got)
+    match std::io::Read::read(&mut stream, &mut buf) {
+        Ok(n) if n > 0 => {
+            if let Ok(s) = std::str::from_utf8(&buf[..n]) {
+                // Extract just the request line and headers (up to \r\n\r\n)
+                if let Some(end) = s.find("\r\n\r\n") {
+                    request = s[..end].to_string();
+                } else {
+                    request = s.to_string();
                 }
-                request.push_str(&line);
             }
-            Err(_) => break,
         }
+        _ => return,
     }
 
     let (status, status_text, body) = handle_request(db, &request);
