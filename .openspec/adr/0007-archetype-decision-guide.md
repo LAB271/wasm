@@ -1,11 +1,12 @@
-# Decision Guide: Choosing Among the Five Archetypes
+# Decision Guide: Choosing Among the Six Archetypes
 
 > Synthesizes [ADR-0002](0002-archetype-browser-worker-wasi-shim.md) through
-> [ADR-0006](0006-archetype-interpreter-in-wasm.md). Every number below is cited
+> [ADR-0006](0006-archetype-interpreter-in-wasm.md), plus
+> [ADR-0008](0008-archetype-guest-owned-sockets.md). Every number below is cited
 > in its own archetype ADR, traceable to a specific experiment's README — nothing
 > here is a new measurement.
 
-## The five, in one table
+## The six, in one table
 
 | Archetype | ADR | Host | Guest target | Real stdin? | Cheapest measured artifact | Cheapest measured cold start |
 |---|---|---|---|---|---|---|
@@ -14,8 +15,9 @@
 | Pre-built server / HTTP black box | [0004](0004-archetype-prebuilt-server-http-blackbox.md) | `wasmtime serve` / `spin up` (off-the-shelf) | `wasi:http/incoming-handler` component | N/A (HTTP, not a terminal) | not yet measured (001/003 both "results pending") | not yet measured |
 | Embedded runtime as a library | [0005](0005-archetype-embedded-runtime-library.md) | Native binary linking `wasmtime` | `wasm32-unknown-unknown` or `wasm32-wasip1` | **Yes — the only archetype proven genuinely interactive** | N/A (not artifact-size focused) | 4ms warm-cache / 190ms true cold |
 | Interpreter-in-WASM | [0006](0006-archetype-interpreter-in-wasm.md) | Node, or headless Chromium | N/A — ships CPython, not your program | No (source, not a terminal session) | 11.9MB | 845ms |
+| Guest-owned sockets | [0008](0008-archetype-guest-owned-sockets.md) | `wasmtime run --wasi inherit-network` | `wasm32-wasip2` + `wasi:sockets` | N/A (TCP server) | not yet measured (014 pending) | not yet measured |
 
-## All 11 experiments, mapped
+## All experiments, mapped
 
 | # | Name | Archetype(s) |
 |---|---|---|
@@ -30,6 +32,9 @@
 | 009 | rust_native_host | [0005](0005-archetype-embedded-runtime-library.md) — zero-import variant |
 | 010 | mastermind_web | [0003](0003-archetype-custom-hand-rolled-abi.md) — pure library variant |
 | 011 | mastermind_cli_wasi | [0005](0005-archetype-embedded-runtime-library.md) — full WASI command variant |
+| 012 | stdlib_size_matrix | N/A — measurement utility |
+| 013 | unicode_strategies | N/A — measurement utility |
+| 014 | wasm_webserver | Leg A: [0008](0008-archetype-guest-owned-sockets.md). Leg B: [0004](0004-archetype-prebuilt-server-http-blackbox.md) |
 
 ## Decision flow
 
@@ -41,9 +46,11 @@ flowchart TD
     q2 -->|yes| a5["Embedded runtime as a library (0005)<br/>you own a native host binary now"]
     q2 -->|no| q3{"Must it run with<br/>ZERO backend process<br/>at request time?"}
     q3 -->|yes| a2["Browser Worker + WASI shim (0002)<br/>wasm32-wasip1 only, no real stdin"]
-    q3 -->|no| q4{"Do multiple languages/teams<br/>need one interchangeable<br/>HTTP interface?"}
-    q4 -->|yes| a4["Pre-built server / HTTP black box (0004)<br/>watch for component-model version skew"]
-    q4 -->|no| a3["Custom hand-rolled ABI (0003)<br/>smallest footprint, but YOU own<br/>the memory-safety contract"]
+    q3 -->|no| q4{"Does it need custom protocols<br/>(WebSocket, MQTT, raw TCP)<br/>not just HTTP?"}
+    q4 -->|yes| a8["Guest-owned sockets (0008)<br/>wasmtime only, you parse the protocol"]
+    q4 -->|no| q5{"Do multiple languages/teams<br/>need one interchangeable<br/>HTTP interface?"}
+    q5 -->|yes| a4["Pre-built server / HTTP black box (0004)<br/>watch for component-model version skew"]
+    q5 -->|no| a3["Custom hand-rolled ABI (0003)<br/>smallest footprint, but YOU own<br/>the memory-safety contract"]
 ```
 
 ## The one cross-cutting lesson
