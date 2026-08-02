@@ -1,0 +1,17 @@
+[package]
+name = "wasm-driver"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "wasm-driver"
+path = "src/main.rs"
+
+[dependencies]
+compute = { path = "../compute", features = ["trig"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

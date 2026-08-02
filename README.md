@@ -32,6 +32,7 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [014](experiments/014_wasm_webserver/) | wasm_webserver | done | TCP vs serverless: guest-owned vs host-owned sockets |
 | [015](experiments/015_postgres_bridge/) | postgres_bridge | done | Database access via host imports (no HTTP sidecar) |
 | [016](experiments/016_ffi_assemblyscript/) | ffi_assemblyscript | done | FFI overhead: AssemblyScript calling Rust host |
+| [017](experiments/017_float_determinism/) | float_determinism | done | Cross-engine float determinism: JS `Math.*` vs WASM libm, ULP-level |
 
 ---
 
@@ -117,6 +118,11 @@ wasm-tools strip input.wasm -o output.wasm
 
 **HTTP compression:** WASM compresses extremely well (60-70% with brotli).
 Pre-compress and serve with `Content-Encoding: br`.
+
+**Experiment 017** measured the flip side of size optimization: bundling a software
+`libm` for deterministic trig (`sin`/`cos`/`tan`/`pow`/`exp`/`log`) instead of relying
+on a host instruction costs 10.2KB on top of a 180B arith-only baseline — determinism
+is bought with bytes, not free.
 
 | Experiment | Raw | Brotli | Savings |
 |------------|-----|--------|---------|

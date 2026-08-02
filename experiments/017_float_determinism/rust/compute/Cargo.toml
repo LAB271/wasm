@@ -1,0 +1,21 @@
+[package]
+name = "compute"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+trig = []      # gates sin/cos/tan/pow/exp/log — this is the whole H4 lever
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[dependencies]
+libm = "0.2.16"

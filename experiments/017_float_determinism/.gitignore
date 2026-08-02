@@ -1,0 +1,2 @@
+# Raw per-host CSV captures and stderr logs — fully regenerable via `make matrix`.
+results/
