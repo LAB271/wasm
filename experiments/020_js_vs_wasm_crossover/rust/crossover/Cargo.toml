@@ -1,0 +1,25 @@
+[package]
+name = "crossover"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# opt-level=3 is the base for BOTH release artifacts we ship: the -Oz and -O3
+# wasm-opt passes (see ../../build.sh) are applied as a post-process step on
+# top of this, so the codegen going in is already speed-tuned in both cases.
+# lto+codegen-units=1 give wasm-opt the most-inlined, least-fragmented input.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[dependencies]
+# Real sqrt, not a hand-rolled Newton loop: wasm32-unknown-unknown's f64::sqrt
+# is std-only on stable, unavailable in no_std. libm gives a proper software
+# implementation instead of reinventing (and under-baking) one — same crate,
+# same rationale as experiment 017's H4 finding.
+libm = { version = "0.2.16", default-features = false }

@@ -1,0 +1,8 @@
+{
+  "name": "crossover-tests",
+  "private": true,
+  "description": "Dev-only: Playwright for perf.mjs. Launches the system-installed Chrome (channel: 'chrome') rather than downloading Playwright's own Chromium build.",
+  "devDependencies": {
+    "playwright": "^1.55.0"
+  }
+}

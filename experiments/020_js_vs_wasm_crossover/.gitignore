@@ -1,0 +1,2 @@
+# Raw captures — fully regenerable via `make bench`/`make rematch`/`make matrix`.
+results/
