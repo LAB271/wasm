@@ -101,6 +101,7 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [015](experiments/015_postgres_bridge/) | postgres_bridge | done | Database access via host imports (no HTTP sidecar) |
 | [016](experiments/016_ffi_assemblyscript/) | ffi_assemblyscript | done | FFI overhead: AssemblyScript calling Rust host |
 | [017](experiments/017_float_determinism/) | float_determinism | done | Cross-engine float determinism: JS `Math.*` vs WASM libm, ULP-level |
+| [018](experiments/018_wasm_platforms/) | wasm_platforms | done | Local-testability matrix across 3 container architectures and 4 platform runtimes; wasi-http portability demonstrated across 5 runtimes |
 
 ### How to read these
 
@@ -254,6 +255,12 @@ and memory ~1.6x (602MB→375MB) versus Pyodide for identical CPU-bound work in 
 
 **Experiment 011** proved genuine interactive I/O works under wasip1. The gap in MVL's
 WASM backend is implementation-specific, not a WASI limitation.
+
+**Experiment 018** demonstrated the wasi-http convergence directly: one component built
+once ran unmodified on Spin, raw `wasmtime serve`, and wasmCloud. Cloudflare Workers and
+Fastly's Viceroy could not run it as-is — Workers because workerd/V8 only parses core Wasm
+modules (not the Component Model's binary format at all), Viceroy because its Component
+Model support is explicitly experimental. Portability is real but not universal yet.
 
 ### 7. Database Access
 
