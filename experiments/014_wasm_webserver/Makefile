@@ -22,6 +22,32 @@ build-a: ## Build Leg A (TCP server)
 build-b: ## Build Leg B (serverless handler)
 	cd leg_b_serverless && cargo build --release --target wasm32-wasip2
 
+# === Size Analysis ===
+
+size: build ## Show artifact sizes with optimization notes
+	@echo ""
+	@echo "┌──────────────────────────────────────────────────────────────────────────────┐"
+	@echo "│  WASM Artifact Sizes                                                         │"
+	@echo "└──────────────────────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "Leg A (TCP):"
+	@ls -lh leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm
+	@echo ""
+	@echo "Leg B (Serverless):"
+	@ls -lh leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm
+	@echo ""
+	@echo "┌──────────────────────────────────────────────────────────────────────────────┐"
+	@echo "│  Optimization Status                                                         │"
+	@echo "└──────────────────────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "  ✓ Rust/LLVM: opt-level='z', LTO, strip (in Cargo.toml)"
+	@echo "  ✗ Binaryen: wasm-opt does NOT support WASM components (wasip2) yet"
+	@echo "    See: https://github.com/WebAssembly/binaryen/issues/6728"
+	@echo ""
+	@echo "  For core WASM modules (wasm32-unknown-unknown), wasm-opt -Oz typically"
+	@echo "  reduces size by 60-70%. Components will benefit when Binaryen adds support."
+	@echo ""
+
 # === Run ===
 
 leg-a: build-a ## Run Leg A: full TCP server via wasmtime

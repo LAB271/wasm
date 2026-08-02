@@ -87,6 +87,26 @@ API:
 
 _Pending benchmarks._
 
+## Size Optimization
+
+Both legs use Rust-side optimizations in `Cargo.toml`:
+
+```toml
+[profile.release]
+opt-level = "z"    # optimize for size
+lto = true         # link-time optimization
+strip = true       # strip symbols
+```
+
+**Binaryen/wasm-opt limitation:** These experiments use `wasm32-wasip2` which produces
+WASM components. Binaryen's `wasm-opt` does not yet support components — only core
+modules. See [binaryen#6728](https://github.com/WebAssembly/binaryen/issues/6728).
+
+For core WASM modules (like experiment 010), `wasm-opt -Oz` typically reduces size
+by 60-70% on top of Rust's LTO. Components will benefit when Binaryen adds support.
+
+Run `make size` to see current artifact sizes with optimization status.
+
 ## Related
 
 - MVL crud_api example: `~/wc/mvl-lang/examples/crud_api/`

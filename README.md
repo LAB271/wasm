@@ -52,6 +52,11 @@ For browser/edge WASM, binary size directly impacts cold start. Rust defaults to
 AssemblyScript compiles directly through Binaryen (no LLVM), explaining its smaller baseline.
 For server-side WASM with `std`, the 16KB overhead amortizes against application code.
 
+**Note:** `wasm-opt` only works with core WASM modules (`wasm32-unknown-unknown`).
+WASM components (`wasm32-wasip2`) are not yet supported by Binaryen — see
+[binaryen#6728](https://github.com/WebAssembly/binaryen/issues/6728). Experiments
+012/013 use core modules (optimized), while 014 uses components (Rust-only optimization).
+
 See [experiments/010_mastermind_web/README.md](experiments/010_mastermind_web/README.md) for details.
 
 ## Structure
