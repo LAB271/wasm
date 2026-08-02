@@ -116,7 +116,7 @@ wait_for_http() {
   local port=$1 path=$2 timeout=${3:-10} label=${4:-port $1}
   local iterations=$(( timeout * 10 ))
   for i in $(seq 1 "$iterations"); do
-    curl -sf "http://127.0.0.1:$port$path" &>/dev/null && return 0
+    curl -sf -m 1 "http://127.0.0.1:$port$path" &>/dev/null && return 0
     sleep 0.1
   done
   fail "$label did not become ready on port $port within ${timeout}s"
