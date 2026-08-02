@@ -172,6 +172,11 @@ CLI override — and locating/writing that file inside the VM
 (`/etc/containers/containers.conf` doesn't exist; the actual path wasn't
 found before time ran out) is the next concrete step, **not completed**.
 
+A minimal pod spec for the `podman play kube` path is written
+(`crun-wasm/pod-wasm.yaml`, `runtimeClassName: crun-wasm`) but **not run** —
+it would block at the identical unresolved step (`crun-wasm` isn't registered
+under `[engine.runtimes]` yet).
+
 **Not verified, explicitly**: `containers.conf` registration, `podman run`
 actually executing a `.wasm` via `crun-wasm`, and the `podman play kube` +
 `runtimeClassName` path that would mirror the k8s RuntimeClass pattern. This
@@ -506,7 +511,9 @@ above, not built here.
 │   └── hello/                        # the wasi-http component under test (wash template)
 └── crun-wasm/                        # 2b leg — blocked at runtime selection, see README
     ├── Containerfile                 # FROM scratch, COPY hello.wasm, ENTRYPOINT — no Linux userspace
-    └── hello/                        # minimal WASI command (Rust, wasm32-wasip1)
+    ├── hello/                        # minimal WASI command (Rust, wasm32-wasip1)
+    └── pod-wasm.yaml                 # runtimeClassName: crun-wasm — written, not yet run
+                                       # (podman play kube blocked on the same step as podman run)
 ```
 
 ## Prerequisites

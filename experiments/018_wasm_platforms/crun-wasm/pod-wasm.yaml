@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello-wasm-pod
+  annotations:
+    module.wasm.image/variant: compat-smart
+spec:
+  # Routes to the runtime registered under [engine.runtimes] in containers.conf,
+  # exactly as k8s RuntimeClass routes to a containerd wasm shim.
+  runtimeClassName: crun-wasm
+  restartPolicy: Never
+  containers:
+    - name: hello
+      image: localhost/hello-crun-wasm:latest
