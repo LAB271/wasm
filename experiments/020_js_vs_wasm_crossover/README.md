@@ -38,7 +38,7 @@ updating the row to note both formulations (see "README row text" at the end).
 | Formulation | ms | vs WASM (best) |
 |---|---|---|
 | WASM -Oz | 15.1–16.1 | 1.00x (baseline) |
-| WASM -O3 | 24.2–25.1 | 1.55–1.63x *(slower — see "-Oz beat -O3" below)* |
+| WASM -O3 | 24.2–25.1 | second-measured; see the retraction below — no real difference |
 | js naive (4 array allocs/call) | 51.3–52.8 | 3.2–3.4x |
 | **js tuned switch (010's original)** | 42.7–43.3 | **2.7–2.9x** |
 | **js bit-packed nibbles (new)** | 17.2–17.5 | **1.10–1.16x** |
@@ -75,15 +75,37 @@ zero branches to mis-speculate, zero deopts observed. **The mechanism isn't "few
 instructions," it's "nothing to deoptimize."** This is inferred from the trace, not
 independently verified against V8 internals beyond what the trace format documents.
 
-### `-Oz` beat `-O3` — consistently, and we don't have a confirmed explanation
+### `-Oz` vs `-O3` — RETRACTED: it was a harness ordering artifact
 
-Every rematch run: `wasm-opt -Oz` (3965 B) was **1.55–1.63x faster** than `wasm-opt -O3`
-(3964 B) on the *identical* cargo-built input, sizes within 1 byte of each other. This
-is the opposite of what "-Oz may cost throughput" predicts. Measured repeatedly (5
-independent full runs), not a one-off — but we did not disassemble both binaries to
-find the specific pass responsible, so treat "which Binaryen pass" as unconfirmed. Report
-both numbers in every table above rather than picking one; this is exactly the kind of
-result the brief asked us to flag rather than paper over.
+An earlier version of this section reported `wasm-opt -Oz` (3965 B) as **1.55–1.63x
+faster** than `-O3` (3964 B) from identical cargo output, called it consistent across 5
+runs, and flagged it as unexplained. **It is not a real effect.**
+
+Two checks settled it. First, the binaries barely differ: 1577 vs 1575 lines of WAT, and
+the whole instruction-mix delta is `i32.eqz` 13→10 and `local.tee` 78→79. A 1.6x runtime
+gap from three instructions was never plausible. Second, and decisively, benchmarking
+them in both orders shows the advantage follows **position, not flag**:
+
+| Benchmark order | first module | second module |
+|-----------------|-------------|---------------|
+| `-Oz` then `-O3` | **-Oz 18.36 ms** | -O3 23.49 ms |
+| `-O3` then `-Oz` | **-O3 17.46 ms** | -Oz 22.85 ms |
+
+Whichever module is measured first wins by ~1.3x. `-Oz` was simply always measured first.
+The most likely mechanism is V8 WASM tiering: the first module gets fully TurboFan-tiered
+during its warmup, while the second competes for the tier-up budget in an already-busy
+process. Not confirmed to that level of detail — but the ordering dependence itself is
+reproducible and is enough to retract the claim.
+
+**`-Oz` and `-O3` perform the same here, within noise.** Tables above that show a `-O3`
+row are reporting the second-measured module and should be read with this in mind.
+
+> **Open question — does this bias anything else?** The rematch compares five JS
+> formulations sequentially in one process, and the axis-1/axis-2 sweeps likewise measure
+> variants in a fixed order. If first-measured wins generally, every sequential
+> comparison in this experiment inherits some bias. The headline 1.14x is probably safe
+> (bit-packed JS is measured *after* WASM, so ordering works against the finding, not for
+> it) but this has not been verified by re-running in shuffled order. Tracked as an issue.
 
 ### Instantiate cost
 
