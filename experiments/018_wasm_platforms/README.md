@@ -307,6 +307,75 @@ to surface rather than paper over.
 Reproduce: `make verify-containerd-shim` and `make verify-k3d-spinkube`
 (`scripts/verify-containerd-shim.sh`, `scripts/verify-k3d-spinkube.sh`).
 
+### 3b. WASM as the workload via podman + `crun` **[VERIFIED]**
+
+A second, much lighter route to the same architecture — no k8s, no separate shim
+install, using only what podman already ships. The podman machine's `crun` is built
+with WASM support:
+
+```
+$ podman machine ssh -- crun --version | tail -1
++SYSTEMD +SELINUX +APPARMOR +CAP +SECCOMP +EBPF +CRIU +LIBKRUN +WASM:wasmedge +YAJL
+```
+
+`crun-wasm` as a separate binary is **not required** — `+WASM:wasmedge` is compiled
+into the default runtime. The image is `FROM scratch` plus one file:
+
+```dockerfile
+FROM scratch
+COPY hello.wasm /hello.wasm
+ENTRYPOINT ["/hello.wasm"]
+```
+
+```
+$ podman build --annotation "module.wasm.image/variant=compat-smart" -t hello-crun-wasm .
+$ podman run --rm --annotation module.wasm.image/variant=compat-smart hello-crun-wasm
+hello from wasm, run by crun+wasmedge — no Linux userspace in this container
+```
+
+Total image: **43.9 kB** (a 40,445-byte `wasm32-wasip1` module and nothing else — no
+distro, no libc, no shell). `podman play kube pod-wasm.yaml` runs it identically.
+
+#### Cold start, measured (5 runs, median)
+
+| | Median | Δ vs container floor |
+|---|--------|---------------------|
+| podman + normal process (`alpine echo`) | **169 ms** | — (podman's own floor) |
+| podman + crun-wasm (WASM *is* the workload) | **217 ms** | **+48 ms** |
+| Spin runtime *inside* podman — [003](../003_wasm_compile/) leg 1b | **1,238 ms** | +1,061 ms |
+
+**This is the architecture #2 vs #3 result in one table.** Running WASM *as* the
+workload costs **+48 ms** over the bare container floor; running a WASM *runtime inside*
+a container costs **+1,061 ms** — a 22x difference. Eliminating the container's contents,
+rather than filling it with a WASM runtime, is what preserves the WASM advantage.
+
+*Caveat, stated plainly:* the 1,238 ms figure measures time-to-first-HTTP-200 for a Spin
+server, while 217 ms measures run-hello-and-exit. They are not the same workload shape.
+The apples-to-apples pair is 169 ms vs 217 ms — both trivial run-and-exit — and it shows
+the wasm handler adds ~48 ms to a container that would otherwise start a Linux process.
+
+#### Correction: `runtimeClassName` does *not* drive this
+
+Widely-repeated guidance says you must register `crun-wasm` under `[engine.runtimes]` in
+`containers.conf` and select it with `runtimeClassName` in the pod spec, "just like k8s
+RuntimeClass". **On podman 5.8.2 that is wrong**, and this machine has no
+`[engine.runtimes]` block at all. Three tests:
+
+| Pod spec | Result |
+|----------|--------|
+| `runtimeClassName` present, annotation **removed** | **fails** — `exec /hello.wasm: Exec format error` |
+| annotation present, `runtimeClassName` **removed** | **works** |
+| annotation present, `runtimeClassName: totally-bogus-runtime` | **works** |
+
+The `module.wasm.image/variant` annotation is the entire mechanism; `runtimeClassName` is
+accepted and silently ignored. **The "1:1 mapping onto k8s RuntimeClass" claim is therefore
+false in a way that matters:** real k8s genuinely routes via RuntimeClass to a containerd
+shim (verified in §3 above), whereas podman routes via an annotation. A manifest that runs
+as WASM under `podman play kube` will *not* run as WASM on k8s, and vice versa. The
+architecture is portable; the manifest is not.
+
+Reproduce: `crun-wasm/` (`Containerfile`, `pod-wasm.yaml`, `hello/`).
+
 ---
 
 ## Four platform runtimes — local-testability matrix
