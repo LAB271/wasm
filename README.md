@@ -1,8 +1,56 @@
 # wasm-experiments
 
-A collection of hands-on experiments exploring WebAssembly (WASM) as an alternative
-to traditional container runtimes. Each experiment tests a concrete hypothesis, measures
-real numbers, and documents what held up and what didn't.
+A collection of hands-on experiments exploring WebAssembly (WASM) both in the browser and
+as an alternative to traditional container runtimes. Each experiment tests a concrete
+hypothesis, measures real numbers, and documents what held up and what didn't.
+
+## Two use cases, constantly conflated
+
+Almost every argument about WebAssembly gets muddled because **WASM has two entirely
+separate deployment stories**, and people cite evidence from one to make claims about the
+other. Get this straight first; everything else in this repo depends on it.
+
+### 1. WASM in the browser (client-side)
+
+The module runs inside the user's browser, hosted by its JavaScript engine (V8, JSC,
+SpiderMonkey). It is downloaded with the page and instantiated by JS.
+
+- **The host already exists.** There is no server, no runtime to provision, nothing to
+  deploy. The browser is the sandbox.
+- **Containers are irrelevant here.** There is no container to replace. "WASM vs Docker"
+  is a category error in this use case.
+- **Why you'd use it:** near-native compute in the page, a language other than JavaScript,
+  and bit-identical results across engines ([017](experiments/017_float_determinism/)).
+- **Experiments:** [004](experiments/004_static_wasi_hello/),
+  [006](experiments/006_worker_kill_switch/), [010](experiments/010_mastermind_web/),
+  [020](experiments/020_js_vs_wasm_crossover/)
+
+### 2. WASM server-side
+
+The module runs on your infrastructure, hosted by a runtime *you* choose. This is where the
+Docker comparison actually lives — and it splits three ways, which matters enormously
+because the numbers differ by two orders of magnitude:
+
+| | What hosts the module | Cold start | Experiments |
+|---|---|---|---|
+| **a. Embedded / CLI** | Your own process embeds wasmtime as a library; WASM is a sandboxed plugin | ~40 ms | [008](experiments/008_mvl_example_wasm_harness/), [009](experiments/009_rust_native_host/), [011](experiments/011_mastermind_cli_wasi/), [015](experiments/015_postgres_bridge/), [016](experiments/016_ffi_assemblyscript/) |
+| **b. WASM runtime inside a container** | An OCI container runs Spin/wasmtime, which runs your module | **1,238 ms** | [003](experiments/003_wasm_compile/) legs 1b/2c |
+| **c. WASM *as* the workload** | A serverless host or a containerd/crun shim runs the module directly — no Linux userspace | ~5 ms | [014](experiments/014_wasm_webserver/), [018](experiments/018_wasm_platforms/) |
+
+**(b) is the trap.** Measured in [003](experiments/003_wasm_compile/): the same module cold-starts
+in 177 ms under `spin up` natively and 1,238 ms wrapped in podman. The container tax of
+**+1,061 ms is six times larger than the WASM runtime's entire startup**, and worse than the
+plain Flask-in-Docker baseline it was supposed to beat. Putting WASM in a container discards
+most of what WASM bought you. It only makes sense when you need OCI/Kubernetes orchestration
+badly enough to pay for it.
+
+**(c) is what "Docker is dying" actually refers to** — the container is eliminated, not merely
+filled with something lighter.
+
+One more trap worth naming: running a *browser* server-side to execute WASM (Playwright +
+headless Chromium) inherits Chromium's own floor of ~600 ms and ~240 MB regardless of what
+runs inside it — measured in [002](experiments/002_chromium_sandbox/), which is slower to cold
+start than a container. Use case 1's host does not transplant into use case 2.
 
 ## Why
 
@@ -92,12 +140,24 @@ performance result. A benchmark's numbers are meant to be argued with.
 - Fastest cold start: host pre-warms the listener
 - Example: [014](experiments/014_wasm_webserver/) — Spin vs raw TCP
 
-| Architecture | Cold Start | Memory | When to use |
-|--------------|------------|--------|-------------|
-| Browser | 0 (cached) | 20MB | Interactive UI, offline-capable |
-| wasmtime embed | ~40ms | ~20MB | Latency-sensitive, single-tenant |
-| Serverless (Spin) | ~5ms | ~10MB | HTTP workloads, multi-tenant |
-| Container | 500ms+ | 50MB+ | Legacy, complex dependencies |
+Measured cold starts, worst to best. See [Two use cases](#two-use-cases-constantly-conflated)
+for why rows 1-2 and rows 3-6 answer different questions:
+
+| Architecture | Cold Start | Memory | Source | When to use |
+|--------------|------------|--------|--------|-------------|
+| Browser, client-side | 0 (cached) | ~20MB | [010](experiments/010_mastermind_web/) | Interactive UI, offline-capable |
+| Headless browser, server-side | ~620ms | ~375MB | [002](experiments/002_chromium_sandbox/) leg 5a | Essentially never — Chromium's floor dominates |
+| Spin runtime in a container | **1,238ms** | ~424MB | [003](experiments/003_wasm_compile/) leg 1b | Only if you need OCI/k8s orchestration |
+| Container running a normal process | 500ms+ | 50MB+ | [001](experiments/001_hello_world/) leg 1 | Legacy, complex dependencies |
+| `spin up` native | 177ms | 16MB | [003](experiments/003_wasm_compile/) leg 1a | HTTP workloads without orchestration |
+| wasmtime embedded as a library | ~40ms | ~20MB | [009](experiments/009_rust_native_host/) | Latency-sensitive, single-tenant |
+| Serverless, host owns the socket | ~5ms | ~10MB | [014](experiments/014_wasm_webserver/) | HTTP workloads, multi-tenant |
+
+Two results here are worth staring at. **Containerising the WASM runtime (1,238ms) is slower
+than the plain container baseline it was meant to beat (500ms+)** — the WASM gains are entirely
+consumed by the container tax. And **a headless browser used as a server-side runtime (~620ms)
+is also slower than that baseline**, even after removing Pyodide and running native WASM.
+Both are cases of keeping a heavyweight host and swapping only what runs inside it.
 
 ### 2. WASM Targets
 
