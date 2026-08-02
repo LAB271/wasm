@@ -1,0 +1,11 @@
+{
+  "name": "ffi-guest",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "asc assembly/index.ts --target release --exportRuntime",
+    "build:debug": "asc assembly/index.ts --target debug --exportRuntime"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.27.0"
+  }
+}

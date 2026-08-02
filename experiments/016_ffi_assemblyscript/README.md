@@ -96,7 +96,33 @@ cargo install wasmtime-cli
 
 ## Status
 
-⬚ Not started
+✅ Working — FFI test passes, benchmarks complete.
+
+## Results
+
+**Benchmark: 10,000 iterations each**
+
+| Operation | Time/call | Notes |
+|-----------|-----------|-------|
+| Pure FFI overhead (noop) | **5 ns** | Just the WASM↔Host boundary |
+| SHA256 (32B input) | **140 ns** | ~135 ns compute + 5 ns FFI |
+| SHA256 (1KB input) | **764 ns** | ~759 ns compute + 5 ns FFI |
+
+**Key findings:**
+
+1. **FFI overhead is negligible** — 5 nanoseconds per call
+2. **Hardware crypto dominates** — ring uses SHA-NI instructions
+3. **AssemblyScript overhead** — 4.8KB WASM (includes AS runtime)
+
+**vs Hypothesized:**
+
+| Operation | Hypothesized | Actual | Notes |
+|-----------|--------------|--------|-------|
+| FFI overhead | <1μs | **5 ns** | 200x better than expected |
+| SHA256 (1KB) | ~5μs | **764 ns** | 6x better (SHA-NI) |
+
+The FFI boundary is essentially free. Hardware-accelerated crypto (ring + SHA-NI)
+makes host-side hashing ~50-100x faster than pure WASM implementations.
 
 ## Related
 

@@ -1,0 +1,16 @@
+[package]
+name = "ffi_host"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ffi_host"
+path = "src/main.rs"
+
+[dependencies]
+wasmtime = "36"
+ring = "0.17"
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
