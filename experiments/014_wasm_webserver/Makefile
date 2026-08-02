@@ -32,6 +32,11 @@ build-a: ## Build Leg A (TCP server with SQLite)
 		wasm-tools strip leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm \
 			-o leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm; \
 	fi
+	@# Pre-compress for distribution (gzip + brotli)
+	gzip -9 -k -f leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm
+	@if command -v brotli >/dev/null 2>&1; then \
+		brotli -9 -k -f leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm; \
+	fi
 
 build-b: ## Build Leg B (serverless handler)
 	cd leg_b_serverless && cargo build --release --target wasm32-wasip2
@@ -39,20 +44,32 @@ build-b: ## Build Leg B (serverless handler)
 		wasm-tools strip leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm \
 			-o leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm; \
 	fi
+	@# Pre-compress for distribution (gzip + brotli)
+	gzip -9 -k -f leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm
+	@if command -v brotli >/dev/null 2>&1; then \
+		brotli -9 -k -f leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm; \
+	fi
 
 # === Size Analysis ===
 
 size: build ## Show artifact sizes with optimization notes
 	@echo ""
 	@echo "┌──────────────────────────────────────────────────────────────────────────────┐"
-	@echo "│  WASM Artifact Sizes                                                         │"
+	@echo "│  WASM Artifact Sizes (Raw / Gzip / Brotli)                                   │"
 	@echo "└──────────────────────────────────────────────────────────────────────────────┘"
 	@echo ""
-	@echo "Leg A (TCP):"
-	@ls -lh leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm
-	@echo ""
-	@echo "Leg B (Serverless):"
-	@ls -lh leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm
+	@printf "  %-12s %12s %12s %12s %10s\n" "Leg" "Raw" "Gzip" "Brotli" "Savings"
+	@printf "  %-12s %12s %12s %12s %10s\n" "---" "---" "----" "------" "-------"
+	@RAW_A=$$(wc -c < leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm | tr -d ' '); \
+	 GZ_A=$$(wc -c < leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm.gz | tr -d ' '); \
+	 BR_A=$$([ -f leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm.br ] && wc -c < leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm.br | tr -d ' ' || echo "N/A"); \
+	 if [ "$$BR_A" != "N/A" ]; then PCT_A=$$((100 - $$BR_A * 100 / $$RAW_A))%; else PCT_A=$$((100 - $$GZ_A * 100 / $$RAW_A))%; fi; \
+	 printf "  %-12s %12s %12s %12s %10s\n" "A (TCP)" "$${RAW_A}B" "$${GZ_A}B" "$${BR_A}B" "$$PCT_A"
+	@RAW_B=$$(wc -c < leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm | tr -d ' '); \
+	 GZ_B=$$(wc -c < leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm.gz | tr -d ' '); \
+	 BR_B=$$([ -f leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm.br ] && wc -c < leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm.br | tr -d ' ' || echo "N/A"); \
+	 if [ "$$BR_B" != "N/A" ]; then PCT_B=$$((100 - $$BR_B * 100 / $$RAW_B))%; else PCT_B=$$((100 - $$GZ_B * 100 / $$RAW_B))%; fi; \
+	 printf "  %-12s %12s %12s %12s %10s\n" "B (Spin)" "$${RAW_B}B" "$${GZ_B}B" "$${BR_B}B" "$$PCT_B"
 	@echo ""
 	@echo "┌──────────────────────────────────────────────────────────────────────────────┐"
 	@echo "│  Optimization Status                                                         │"
@@ -60,6 +77,7 @@ size: build ## Show artifact sizes with optimization notes
 	@echo ""
 	@echo "  ✓ Rust/LLVM: opt-level='z', LTO, strip (in Cargo.toml)"
 	@echo "  ✓ wasm-tools strip: removes custom sections (DWARF, names)"
+	@echo "  ✓ HTTP compression: gzip (-9) and brotli (-9) pre-compressed"
 	@echo "  ✗ Binaryen wasm-opt: does NOT support WASM components (wasip2) yet"
 	@echo "    See: https://github.com/WebAssembly/binaryen/issues/6728"
 	@echo ""

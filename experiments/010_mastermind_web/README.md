@@ -94,12 +94,14 @@ For trivial functions, WASM binary size varies dramatically by language and buil
 configuration. This experiment documents the journey from 16KB to 950 bytes for
 the same Rust function:
 
-| Configuration | Size | Notes |
+| Configuration | Size | Brotli | Notes |
 |---------------|------|-------|
-| Rust default (`std`) | 16 KB | Includes panic handling, allocator stubs, LLVM glue |
-| Rust `#![no_std]` | 3.1 KB | Removes stdlib, requires custom panic handler |
-| Rust `#![no_std]` + `wasm-opt -Oz` | **950 B** | Binaryen optimizer strips dead code |
-| AssemblyScript | **481 B** | Designed for WASM, near 1:1 compilation |
+| Rust default (`std`) | 16 KB | — | Includes panic handling, allocator stubs, LLVM glue |
+| Rust `#![no_std]` | 3.1 KB | — | Removes stdlib, requires custom panic handler |
+| Rust `#![no_std]` + `wasm-opt -Oz` | **950 B** | **634 B** | Binaryen optimizer strips dead code |
+| AssemblyScript | **481 B** | **268 B** | Designed for WASM, near 1:1 compilation |
+
+*Brotli column shows HTTP transfer size (`make size` for current values).*
 
 ### Why the difference?
 

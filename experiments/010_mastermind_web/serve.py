@@ -6,6 +6,10 @@ No COOP/COEP headers needed here (unlike experiment 006) — this experiment
 doesn't use SharedArrayBuffer/Atomics, just a plain fetch() of a .wasm file
 and WebAssembly.instantiate(), both same-origin.
 
+Supports HTTP compression:
+  - Serves pre-compressed .wasm.br (brotli) or .wasm.gz (gzip) when available
+  - Compresses JSON API responses with gzip
+
 Repeats the exp004/006 lesson learned the hard way earlier in this repo's
 history: serve from THIS script's own directory, not the caller's cwd —
 `os.path.dirname(os.path.abspath(__file__))` regardless of where the script
@@ -15,6 +19,7 @@ API endpoints for CLI play:
   POST /api/new    -> {"game_id": "...", "message": "..."}
   POST /api/guess  -> {"guess": [1,2,3,4]} -> {"blacks": N, "whites": N, "won": bool, "attempts": N}
 """
+import gzip
 import http.server
 import json
 import os
@@ -52,6 +57,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         **http.server.SimpleHTTPRequestHandler.extensions_map,
         ".wasm": "application/wasm",
     }
+
+    def do_GET(self):
+        """Serve pre-compressed .wasm files when client accepts them."""
+        path = urlparse(self.path).path
+        if path.endswith(".wasm"):
+            accept_encoding = self.headers.get("Accept-Encoding", "")
+            file_path = os.path.join(web_dir, path.lstrip("/"))
+
+            # Try brotli first (better compression)
+            if "br" in accept_encoding and os.path.exists(file_path + ".br"):
+                self._serve_compressed(file_path + ".br", "application/wasm", "br")
+                return
+            # Fall back to gzip
+            if "gzip" in accept_encoding and os.path.exists(file_path + ".gz"):
+                self._serve_compressed(file_path + ".gz", "application/wasm", "gzip")
+                return
+
+        # Default behavior for other files
+        super().do_GET()
+
+    def _serve_compressed(self, file_path: str, content_type: str, encoding: str):
+        """Serve a pre-compressed file with appropriate headers."""
+        try:
+            with open(file_path, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Encoding", encoding)
+            self.send_header("Content-Length", len(data))
+            self.send_header("Vary", "Accept-Encoding")
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            self.send_error(500, str(e))
 
     def do_POST(self):
         path = urlparse(self.path).path
@@ -112,8 +151,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def _json_response(self, data: dict, status: int = 200):
         body = json.dumps(data).encode()
+        accept_encoding = self.headers.get("Accept-Encoding", "")
+
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+
+        # Compress JSON responses if client accepts gzip
+        if "gzip" in accept_encoding and len(body) > 100:
+            body = gzip.compress(body)
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
+
         self.send_header("Content-Length", len(body))
         self.end_headers()
         self.wfile.write(body)

@@ -25,6 +25,11 @@ build-rust: ## Compile engines/rust -> web/engine-rust.wasm (cargo, wasm32-unkno
 	else \
 		cp engines/rust/target/wasm32-unknown-unknown/release/mastermind_engine.wasm web/engine-rust.wasm; \
 	fi
+	@# Pre-compress for HTTP serving (gzip + brotli)
+	gzip -9 -k -f web/engine-rust.wasm
+	@if command -v brotli >/dev/null 2>&1; then \
+		brotli -9 -k -f web/engine-rust.wasm; \
+	fi
 
 build-as: ## Compile engines/assemblyscript -> web/engine-as.wasm (asc)
 	@if [ ! -d engines/assemblyscript/node_modules ]; then \
@@ -32,6 +37,11 @@ build-as: ## Compile engines/assemblyscript -> web/engine-as.wasm (asc)
 		cd engines/assemblyscript && npm install --no-audit --no-fund; \
 	fi
 	cd engines/assemblyscript && npm run build
+	@# Pre-compress for HTTP serving (gzip + brotli)
+	gzip -9 -k -f web/engine-as.wasm
+	@if command -v brotli >/dev/null 2>&1; then \
+		brotli -9 -k -f web/engine-as.wasm; \
+	fi
 
 build-ui: ## Compile web/app.ts -> web/dist/app.js (tsc)
 	@if [ ! -d web/node_modules ]; then \
@@ -67,4 +77,25 @@ test-browser: build ## tests/browser.test.mjs — real headless Chrome, both eng
 
 clean: ## Remove all build output
 	rm -rf web/dist web/engine-rust.wasm web/engine-as.wasm web/engine-as.debug.wasm
+	rm -rf web/engine-*.wasm.gz web/engine-*.wasm.br
 	rm -rf engines/rust/target
+
+size: build ## Show WASM sizes (raw, gzip, brotli)
+	@echo ""
+	@echo "┌────────────────────────────────────────────────────────────┐"
+	@echo "│  WASM Artifact Sizes                                       │"
+	@echo "└────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@printf "  %-20s %8s %8s %8s\n" "Engine" "Raw" "Gzip" "Brotli"
+	@printf "  %-20s %8s %8s %8s\n" "------" "---" "----" "------"
+	@printf "  %-20s %8s %8s %8s\n" \
+		"Rust" \
+		"$$(wc -c < web/engine-rust.wasm | tr -d ' ')B" \
+		"$$(wc -c < web/engine-rust.wasm.gz | tr -d ' ')B" \
+		"$$([ -f web/engine-rust.wasm.br ] && wc -c < web/engine-rust.wasm.br | tr -d ' ' || echo 'N/A')B"
+	@printf "  %-20s %8s %8s %8s\n" \
+		"AssemblyScript" \
+		"$$(wc -c < web/engine-as.wasm | tr -d ' ')B" \
+		"$$(wc -c < web/engine-as.wasm.gz | tr -d ' ')B" \
+		"$$([ -f web/engine-as.wasm.br ] && wc -c < web/engine-as.wasm.br | tr -d ' ' || echo 'N/A')B"
+	@echo ""

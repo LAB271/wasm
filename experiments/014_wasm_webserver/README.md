@@ -146,9 +146,37 @@ strip = true       # strip symbols
 The build also runs `wasm-tools strip` to remove custom sections (DWARF debugging
 info, names section) that aren't needed at runtime.
 
-**Binaryen/wasm-opt limitation:** These experiments use `wasm32-wasip2` which produces
-WASM components. Binaryen's `wasm-opt` does not yet support components — only core
-modules. See [binaryen#6728](https://github.com/WebAssembly/binaryen/issues/6728).
+### HTTP Compression
+
+WASM binaries compress extremely well. The build generates `.gz` (gzip) and `.br`
+(brotli) pre-compressed versions for HTTP serving:
+
+| Leg | Raw | Gzip | Brotli | Savings |
+|-----|-----|------|--------|---------|
+| A (TCP + SQLite) | 1.1 MB | 478 KB | **448 KB** | 61% |
+| B (Spin serverless) | 222 KB | 88 KB | **81 KB** | 64% |
+
+Brotli consistently beats gzip by ~5-10%. For WASM distribution:
+- **CDN/static hosting**: serve pre-compressed `.br` files with `Content-Encoding: br`
+- **Dynamic hosting**: enable brotli compression at the reverse proxy layer
+- **Edge/serverless**: smaller = faster cold start (less to compile)
+
+Run `make size` to see current artifact sizes.
+
+### Why WASM compresses so well
+
+WASM binaries have high redundancy:
+- Repetitive instruction patterns (local.get, i32.add, call sequences)
+- Long runs of zeros (function padding, data section alignment)
+- Predictable structure (section headers, type indices)
+
+This makes them ideal for dictionary-based compression (LZ77 family).
+
+### Binaryen/wasm-opt limitation
+
+These experiments use `wasm32-wasip2` which produces WASM components. Binaryen's
+`wasm-opt` does not yet support components — only core modules.
+See [binaryen#6728](https://github.com/WebAssembly/binaryen/issues/6728).
 
 | Tool | Component support | Effect |
 |------|-------------------|--------|
@@ -157,8 +185,6 @@ modules. See [binaryen#6728](https://github.com/WebAssembly/binaryen/issues/6728
 
 For core WASM modules (like experiment 010), `wasm-opt -Oz` typically reduces size
 by 60-70% on top of Rust's LTO. Components will benefit when Binaryen adds support.
-
-Run `make size` to see current artifact sizes with optimization status.
 
 ## Related
 
