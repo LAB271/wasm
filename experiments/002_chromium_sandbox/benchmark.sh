@@ -239,6 +239,44 @@ run_leg4b() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# LEG 5a: Native WASM (Rust) / shared page / sequential
+# ══════════════════════════════════════════════════════════════════════════════
+run_leg5a() {
+  info "Leg 5a: Native WASM (Rust) / shared page (port 5018)"
+  require_port_free 5018 "Leg 5a"
+
+  node "$SCRIPT_DIR/harness.js" 5a &
+  LEG5A_PID=$!
+  PIDS_TO_KILL+=("$LEG5A_PID")
+  COLD_5A=$(cold_start_ms 5018)
+  ok "cold start: ${COLD_5A}ms"
+
+  HEY_5A=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5018/")
+  IFS=: read -r RSS_5A RSS_5A_NODE RSS_5A_CHROME <<< "$(harness_rss "$LEG5A_PID")"
+  kill_and_wait "$LEG5A_PID"
+  ok "rss: ${RSS_5A}MB (node:${RSS_5A_NODE}+chrome:${RSS_5A_CHROME})  p50: $(hey_stat "$HEY_5A" p50)ms  rps: $(hey_stat "$HEY_5A" rps)"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LEG 5b: Native WASM (AssemblyScript) / shared page / sequential
+# ══════════════════════════════════════════════════════════════════════════════
+run_leg5b() {
+  info "Leg 5b: Native WASM (AssemblyScript) / shared page (port 5019)"
+  require_port_free 5019 "Leg 5b"
+
+  node "$SCRIPT_DIR/harness.js" 5b &
+  LEG5B_PID=$!
+  PIDS_TO_KILL+=("$LEG5B_PID")
+  COLD_5B=$(cold_start_ms 5019)
+  ok "cold start: ${COLD_5B}ms"
+
+  HEY_5B=$(hey -n $HEY_N -c $HEY_C "http://127.0.0.1:5019/")
+  IFS=: read -r RSS_5B RSS_5B_NODE RSS_5B_CHROME <<< "$(harness_rss "$LEG5B_PID")"
+  kill_and_wait "$LEG5B_PID"
+  ok "rss: ${RSS_5B}MB (node:${RSS_5B_NODE}+chrome:${RSS_5B_CHROME})  p50: $(hey_stat "$HEY_5B" p50)ms  rps: $(hey_stat "$HEY_5B" rps)"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Results tables
 # ══════════════════════════════════════════════════════════════════════════════
 print_results() {
@@ -286,6 +324,17 @@ print_results() {
   printf "| %-22s | %-24s | %-28s |\n" "hey p95 (ms)" "$(hey_stat "${HEY_4A:-}" p95)" "$(hey_stat "${HEY_4B:-}" p95)"
   printf "| %-22s | %-24s | %-28s |\n" "hey req/s"    "$(hey_stat "${HEY_4A:-}" rps)" "$(hey_stat "${HEY_4B:-}" rps)"
   echo ""
+
+  echo "## Results — CPU-bound: Pyodide vs native WASM (legs 1a/5a/5b)"
+  echo ""
+  printf "| %-22s | %-20s | %-20s | %-24s |\n" "Metric" "1a Pyodide" "5a Rust/WASM" "5b AssemblyScript/WASM"
+  printf "| %-22s | %-20s | %-20s | %-24s |\n" "---" "---" "---" "---"
+  printf "| %-22s | %-20s | %-20s | %-24s |\n" "Cold start (ms)"   "${COLD_1A:-n/a}" "${COLD_5A:-n/a}" "${COLD_5B:-n/a}"
+  printf "| %-22s | %-20s | %-20s | %-24s |\n" "Memory RSS (MB)"   "${RSS_1A:-n/a}"  "${RSS_5A:-n/a}"  "${RSS_5B:-n/a}"
+  printf "| %-22s | %-20s | %-20s | %-24s |\n" "hey p50 (ms)" "$(hey_stat "${HEY_1A:-}" p50)" "$(hey_stat "${HEY_5A:-}" p50)" "$(hey_stat "${HEY_5B:-}" p50)"
+  printf "| %-22s | %-20s | %-20s | %-24s |\n" "hey p95 (ms)" "$(hey_stat "${HEY_1A:-}" p95)" "$(hey_stat "${HEY_5A:-}" p95)" "$(hey_stat "${HEY_5B:-}" p95)"
+  printf "| %-22s | %-20s | %-20s | %-24s |\n" "hey req/s"    "$(hey_stat "${HEY_1A:-}" rps)" "$(hey_stat "${HEY_5A:-}" rps)" "$(hey_stat "${HEY_5B:-}" rps)"
+  echo ""
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -302,6 +351,8 @@ run_leg "Leg 1a" run_leg1a
 run_leg "Leg 1b" run_leg1b
 run_leg "Leg 2a" run_leg2a
 run_leg "Leg 2b" run_leg2b
+run_leg "Leg 5a" run_leg5a
+run_leg "Leg 5b" run_leg5b
 
 # DB legs
 run_leg "Postgres" start_postgres

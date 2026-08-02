@@ -134,6 +134,10 @@ Pre-compress and serve with `Content-Encoding: br`.
 AssemblyScript produces smaller binaries for trivial functions (481B vs 950B) because
 it compiles directly through Binaryen. For complex applications, the difference narrows.
 
+**Experiment 002 (legs 5a/5b)** shows Pyodide's cold-start/memory cost is Pyodide-specific, not
+inherent to WASM-in-a-browser: native Rust/AssemblyScript WASM cut cold start ~2.9x (1.8s→0.6s)
+and memory ~1.6x (602MB→375MB) versus Pyodide for identical CPU-bound work in the same harness.
+
 ### 6. WASI Capabilities
 
 | Feature | wasip1 | wasip2 |

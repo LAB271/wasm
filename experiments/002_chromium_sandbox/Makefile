@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 LEG ?= 1a
 
-.PHONY: help build run test bench bench-quick clean
+.PHONY: help build build-wasm run test bench bench-quick clean
 
 .DEFAULT_GOAL := help
 
@@ -18,9 +18,19 @@ help: ## Show this help
 build: ## Install npm dependencies (playwright, pg)
 	npm install --no-audit --no-fund
 
+build-wasm: ## Build native WASM workloads for legs 5a/5b (Rust + AssemblyScript)
+	cd workloads/rust && cargo build --target wasm32-unknown-unknown --release
+	wasm-bindgen --target web --out-dir workloads/rust/pkg \
+	  workloads/rust/target/wasm32-unknown-unknown/release/cpu_bound.wasm
+	cd workloads/assemblyscript && npm install --no-audit --no-fund && npm run build
+	command -v wasm-opt >/dev/null && { \
+	  wasm-opt -Oz --enable-bulk-memory workloads/rust/pkg/cpu_bound_bg.wasm -o workloads/rust/pkg/cpu_bound_bg.wasm; \
+	  wasm-opt -Oz --enable-bulk-memory workloads/assemblyscript/build/cpu_bound.wasm -o workloads/assemblyscript/build/cpu_bound.wasm; \
+	} || echo "wasm-opt not found — skipping size optimization (binaryen: brew install binaryen)"
+
 # === Run ===
 
-run: build ## Run one leg standalone (vars: LEG=1a|1b|2a|2b|3a|3b|4a|4b)
+run: build ## Run one leg standalone (vars: LEG=1a|1b|2a|2b|3a|3b|4a|4b|5a|5b)
 	node harness.js $(LEG)
 
 # === Test ===

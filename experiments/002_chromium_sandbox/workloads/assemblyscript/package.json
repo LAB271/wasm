@@ -1,0 +1,11 @@
+{
+  "name": "cpu_bound_as",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "asc assembly/index.ts --target release --outFile build/cpu_bound.wasm --exportRuntime"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.27.0"
+  }
+}

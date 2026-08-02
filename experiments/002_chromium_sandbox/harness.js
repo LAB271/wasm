@@ -18,6 +18,13 @@ const LEG_CONFIG = {
   "3b": { port: 5015, workload: "db_query",        isolation: "fresh",   concurrency: "sequential", db: true },
   "4a": { port: 5016, workload: "mixed",           isolation: "shared",  concurrency: "sequential", db: true },
   "4b": { port: 5017, workload: "mixed",           isolation: "pool",    concurrency: "concurrent", db: true },
+  // Legs 5a/5b: native-compiled WASM run directly in V8 — no Pyodide, no Python
+  // interpreter. Same fib(30)+matrix(20) computation as cpu_bound.py, to show
+  // whether Pyodide's cold-start/memory overhead is Pyodide-specific or
+  // inherent to running WASM inside a browser. Shared page + sequential,
+  // identical isolation to leg 1a, for an apples-to-apples comparison.
+  "5a": { port: 5018, runtime: "wasm", wasmEngine: "rust",           isolation: "shared", concurrency: "sequential" },
+  "5b": { port: 5019, runtime: "wasm", wasmEngine: "assemblyscript", isolation: "shared", concurrency: "sequential" },
 };
 
 const POOL_SIZE = 5;
@@ -32,9 +39,19 @@ if (!legArg || !LEG_CONFIG[legArg]) {
 const config = LEG_CONFIG[legArg];
 const PORT = config.port;
 
-// ── Load workload Python source ─────────────────────────────────────────────
-const workloadPath = path.join(__dirname, "workloads", `${config.workload}.py`);
-const workloadSource = fs.readFileSync(workloadPath, "utf-8");
+// ── Load workload Python source (Pyodide legs only) ─────────────────────────
+const workloadSource = config.workload
+  ? fs.readFileSync(path.join(__dirname, "workloads", `${config.workload}.py`), "utf-8")
+  : null;
+
+// ── Load native WASM binary, base64-encoded for page.evaluate (legs 5a/5b) ──
+const WASM_PATHS = {
+  rust: path.join(__dirname, "workloads", "rust", "pkg", "cpu_bound_bg.wasm"),
+  assemblyscript: path.join(__dirname, "workloads", "assemblyscript", "build", "cpu_bound.wasm"),
+};
+const wasmBytesB64 = config.runtime === "wasm"
+  ? fs.readFileSync(WASM_PATHS[config.wasmEngine]).toString("base64")
+  : null;
 
 // ── Postgres pool (for DB legs) ─────────────────────────────────────────────
 let pgPool = null;
@@ -200,9 +217,76 @@ async function startWorkers(browser) {
   };
 }
 
+// Native WASM in V8 — no Pyodide (Legs 5a/5b)
+async function initWasmPage(browser, engine, b64) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto("about:blank");
+  await page.evaluate(({ b64, engine }) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    return WebAssembly.instantiate(
+      bytes,
+      engine === "assemblyscript" ? { env: { abort() { throw new Error("assemblyscript abort"); } } } : {}
+    ).then(({ instance }) => {
+      const wasm = instance.exports;
+      if (engine === "rust") {
+        // Mirrors wasm-pack's `--target web` glue (workloads/rust/pkg/cpu_bound.js):
+        // handle() returns a (ptr, len) pair via an out-param on the shadow stack.
+        const decoder = new TextDecoder("utf-8");
+        window.__wasmHandle = () => {
+          const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+          wasm.handle(retptr);
+          const dv = new DataView(wasm.memory.buffer);
+          const ptr = dv.getInt32(retptr + 0, true);
+          const len = dv.getInt32(retptr + 4, true);
+          const str = decoder.decode(new Uint8Array(wasm.memory.buffer, ptr, len));
+          wasm.__wbindgen_add_to_stack_pointer(16);
+          wasm.__wbindgen_export(ptr, len, 1);
+          return str;
+        };
+      } else {
+        // AssemblyScript string layout: a 4-byte UTF-16LE length prefix
+        // immediately precedes the data the returned pointer points to.
+        const decoder = new TextDecoder("utf-16le");
+        window.__wasmHandle = () => {
+          const ptr = wasm.handle();
+          const len = new DataView(wasm.memory.buffer).getUint32(ptr - 4, true);
+          return decoder.decode(new Uint8Array(wasm.memory.buffer, ptr, len));
+        };
+      }
+    });
+  }, { b64, engine });
+  return { context, page };
+}
+
+async function runWasmOnPage(page) {
+  const t0 = process.hrtime.bigint();
+  const body = await page.evaluate(() => window.__wasmHandle());
+  const bridgeMs = Number(process.hrtime.bigint() - t0) / 1_000_000;
+  return { body, bridgeMs };
+}
+
+// Shared page, native WASM, sequential (legs 5a/5b) — mirrors startShared()
+async function startSharedWasm(browser) {
+  const { page } = await initWasmPage(browser, config.wasmEngine, wasmBytesB64);
+
+  return async (req, res) => {
+    try {
+      const { body, bridgeMs } = await runWasmOnPage(page);
+      const parsed = JSON.parse(body);
+      parsed._bridge_ms = Math.round(bridgeMs * 100) / 100;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(parsed));
+    } catch (err) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: String(err) }));
+    }
+  };
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`→ Leg ${legArg}: ${config.workload} / ${config.isolation} / ${config.concurrency}`);
+  console.log(`→ Leg ${legArg}: ${config.workload || config.wasmEngine} / ${config.isolation} / ${config.concurrency}`);
   console.log("→ Launching headless Chrome (Playwright)...");
 
   const browser = await chromium.launch({
@@ -216,23 +300,27 @@ async function main() {
   }
 
   let handler;
-  switch (config.isolation) {
-    case "shared":
-      handler = config.concurrency === "workers"
-        ? await startWorkers(browser)
-        : await startShared(browser);
-      break;
-    case "fresh":
-      handler = await startFresh(browser);
-      break;
-    case "pool":
-      handler = await startPool(browser);
-      break;
-    default:
-      throw new Error(`Unknown isolation: ${config.isolation}`);
+  if (config.runtime === "wasm") {
+    handler = await startSharedWasm(browser);
+  } else {
+    switch (config.isolation) {
+      case "shared":
+        handler = config.concurrency === "workers"
+          ? await startWorkers(browser)
+          : await startShared(browser);
+        break;
+      case "fresh":
+        handler = await startFresh(browser);
+        break;
+      case "pool":
+        handler = await startPool(browser);
+        break;
+      default:
+        throw new Error(`Unknown isolation: ${config.isolation}`);
+    }
   }
 
-  console.log("→ Pyodide ready inside Chrome");
+  console.log(config.runtime === "wasm" ? "→ WASM instance ready inside Chrome" : "→ Pyodide ready inside Chrome");
 
   const server = http.createServer(handler);
   server.listen(PORT, "127.0.0.1", () => {

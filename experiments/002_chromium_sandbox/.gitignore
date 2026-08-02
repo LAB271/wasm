@@ -1,2 +1,6 @@
 node_modules/
 __pycache__/
+
+# WASM build artifacts (legs 5a/5b) — rebuilt via `make build-wasm`
+workloads/rust/pkg/
+workloads/assemblyscript/build/
