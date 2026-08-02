@@ -1,5 +1,7 @@
 # node_modules/, package-lock.json already covered by repo-root .gitignore.
 web/engine-*.wasm
+web/engine-*.wasm.gz
+web/engine-*.wasm.br
 web/engine-*.b64.js
 web/engine-*.b64.js.gz
 web/engine-*.b64.js.br
