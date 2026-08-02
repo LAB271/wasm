@@ -16,8 +16,18 @@ help: ## Show this help
 
 build: build-a build-b ## Build both legs
 
-build-a: ## Build Leg A (TCP server)
-	cd leg_a_tcp && cargo build --release --target wasm32-wasip2
+build-a: ## Build Leg A (TCP server with SQLite)
+	@# SQLite bundled requires WASI SDK for C compilation
+	@if [ -d /opt/wasi-sdk ]; then \
+		export WASI_SDK_PATH=/opt/wasi-sdk && \
+		export CC="$${WASI_SDK_PATH}/bin/clang" && \
+		export AR="$${WASI_SDK_PATH}/bin/llvm-ar" && \
+		export CFLAGS="--sysroot=$${WASI_SDK_PATH}/share/wasi-sysroot" && \
+		cd leg_a_tcp && cargo build --release --target wasm32-wasip2; \
+	else \
+		echo "Warning: WASI SDK not found at /opt/wasi-sdk — SQLite build may fail"; \
+		cd leg_a_tcp && cargo build --release --target wasm32-wasip2; \
+	fi
 	@if command -v wasm-tools >/dev/null 2>&1; then \
 		wasm-tools strip leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm \
 			-o leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm; \
@@ -75,18 +85,35 @@ leg-b: build-b ## Run Leg B: serverless handler via Spin
 test: test-a test-b ## Test both legs return identical JSON
 	@echo "Both legs verified."
 
-test-a: build-a ## Test Leg A
+test-a: build-a ## Test Leg A (CRUD)
 	@echo "Testing Leg A (TCP)..."
-	@timeout 5 bash -c 'wasmtime run --wasi inherit-network \
+	@timeout 10 bash -c 'wasmtime run --wasi inherit-network \
 		--dir data::/ \
 		--env CSV_PATH=/records.csv \
 		leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm &' || true
 	@sleep 1
+	@echo "  GET /health..."
 	@curl -s http://127.0.0.1:8080/health | jq -e '.status == "ok"'
+	@echo "  GET /records..."
 	@curl -s http://127.0.0.1:8080/records | jq -e 'length == 5'
+	@echo "  GET /records/1..."
 	@curl -s http://127.0.0.1:8080/records/1 | jq -e '.name == "Alice"'
+	@echo "  POST /records..."
+	@curl -s -X POST http://127.0.0.1:8080/records \
+		-H "Content-Type: application/json" \
+		-d '{"name":"Test","email":"test@example.com","department":"QA"}' | jq -e '.id == 6'
+	@echo "  GET /records (after POST)..."
+	@curl -s http://127.0.0.1:8080/records | jq -e 'length == 6'
+	@echo "  PUT /records/6..."
+	@curl -s -X PUT http://127.0.0.1:8080/records/6 \
+		-H "Content-Type: application/json" \
+		-d '{"name":"Updated","email":"updated@example.com","department":"Dev"}' | jq -e '.name == "Updated"'
+	@echo "  DELETE /records/6..."
+	@curl -s -X DELETE http://127.0.0.1:8080/records/6 -w "%{http_code}" | grep -q 204
+	@echo "  GET /records (after DELETE)..."
+	@curl -s http://127.0.0.1:8080/records | jq -e 'length == 5'
 	@pkill -f leg_a_tcp.wasm || true
-	@echo "Leg A: PASS"
+	@echo "Leg A: PASS (all CRUD operations)"
 
 test-b: build-b ## Test Leg B
 	@echo "Testing Leg B (serverless)..."

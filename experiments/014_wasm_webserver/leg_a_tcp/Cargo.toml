@@ -11,6 +11,8 @@ crate-type = ["cdylib"]
 wasi = "0.13"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# SQLite with bundled C source (requires WASI SDK)
+rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
 
 [profile.release]
 opt-level = "z"
