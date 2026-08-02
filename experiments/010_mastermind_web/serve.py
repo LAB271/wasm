@@ -7,8 +7,11 @@ doesn't use SharedArrayBuffer/Atomics, just a plain fetch() of a .wasm file
 and WebAssembly.instantiate(), both same-origin.
 
 Supports HTTP compression:
-  - Serves pre-compressed .wasm.br (brotli) or .wasm.gz (gzip) when available
-  - Compresses JSON API responses with gzip
+  - Serves pre-compressed .br (brotli) or .gz (gzip) sidecars, built at
+    `make build` time, for every COMPRESSIBLE_EXTS extension (.wasm, .js —
+    the wasm engines, web/dist/*.js, and the base64-inlined engine-*.b64.js)
+  - Compresses JSON API responses with gzip at request time (the one thing
+    here that isn't a static file, so it can't be pre-compressed)
 
 CORS: sends Access-Control-Allow-Origin (+ Methods/Headers) on every response
 and answers OPTIONS preflight, so a page on one instance can fetch() a .wasm
@@ -70,7 +73,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     extensions_map = {
         **http.server.SimpleHTTPRequestHandler.extensions_map,
         ".wasm": "application/wasm",
+        ".js": "text/javascript",
     }
+
+    # Extensions pre-compressed at build time (Makefile: build-rust/build-as
+    # gzip+brotli the .wasm engines, build-ui does web/dist/*.js, build-inline
+    # does engine-*.b64.js) — .wasm and .js share the do_GET path below, with
+    # Content-Type looked up from extensions_map rather than hardcoded.
+    COMPRESSIBLE_EXTS = (".wasm", ".js")
 
     def end_headers(self):
         """Single choke point for every response path (do_GET's default
@@ -89,19 +99,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        """Serve pre-compressed .wasm files when client accepts them."""
+        """Serve pre-compressed .br/.gz sidecars for COMPRESSIBLE_EXTS files
+        when one exists and the client accepts that encoding."""
         path = urlparse(self.path).path
-        if path.endswith(".wasm"):
+        ext = os.path.splitext(path)[1]
+        if ext in self.COMPRESSIBLE_EXTS:
             accept_encoding = self.headers.get("Accept-Encoding", "")
             file_path = os.path.join(web_dir, path.lstrip("/"))
+            content_type = self.extensions_map[ext]
 
             # Try brotli first (better compression)
             if "br" in accept_encoding and os.path.exists(file_path + ".br"):
-                self._serve_compressed(file_path + ".br", "application/wasm", "br")
+                self._serve_compressed(file_path + ".br", content_type, "br")
                 return
             # Fall back to gzip
             if "gzip" in accept_encoding and os.path.exists(file_path + ".gz"):
-                self._serve_compressed(file_path + ".gz", "application/wasm", "gzip")
+                self._serve_compressed(file_path + ".gz", content_type, "gzip")
                 return
 
         # Default behavior for other files

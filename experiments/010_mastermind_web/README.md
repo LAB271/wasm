@@ -94,7 +94,7 @@ console errors.
 010_mastermind_web/
 ├── README.md
 ├── Makefile                       # build-rust, build-as, build-ui, build-inline, build, run, test, clean
-├── serve.py                        # static server, .wasm MIME type + pre-compressed serving, CORS (+ --no-cors)
+├── serve.py                        # static server, pre-compressed .wasm/.js serving, CORS (+ --no-cors)
 ├── engines/
 │   ├── rust/                       # score_guess, cargo test covers the scoring logic
 │   └── assemblyscript/             # score_guess, same ABI, no host imports
@@ -234,19 +234,50 @@ tiny sizes, compressor framing/dictionary overhead dominates, and the
 AS module is *worse* compressed (45.5%) than raw (39.7%). Don't assume
 compression bails you out of the base64 tax — measure your own artifact.
 
+### Measured: JS compression (dist/app.js, dist/inline.js)
+
+`serve.py`'s pre-compressed-sidecar serving isn't `.wasm`-specific — it's
+extension-driven (`COMPRESSIBLE_EXTS = (".wasm", ".js")`, Content-Type from
+`extensions_map`), so the same `make build`-time gzip/brotli step that covers
+the wasm engines and the `.b64.js` modules also covers the compiled game and
+comparison-page JS:
+
+| | Raw | Gzip | Brotli |
+|---|-----|------|--------|
+| `dist/app.js` | 18735 B | 5349 B (−71.4%) | 5046 B (−73.1%) |
+| `dist/inline.js` | 7479 B | 2610 B (−65.1%) | 2409 B (−67.8%) |
+
+Ordinary JS text compresses far better than base64 WASM text does (65–73%
+here vs. the 30–45% *penalty* the b64 modules carry) — base64's near-uniform
+byte distribution gives a general-purpose compressor much less to work with
+than a hand-written program's repetitive tokens/whitespace.
+
 ### Measured: requests, bytes, timing (localhost, Chrome, `inline.html`)
+
+With `.b64.js` now served brotli-compressed like everything else, this is
+finally an apples-to-apples comparison — both columns are the real
+over-the-wire bytes for their loading path, not raw-vs-compressed:
 
 | | fetch() | inline base64 |
 |---|---------|----------------|
 | Requests (Rust) | 1 | 1 |
-| Bytes transferred (Rust, Resource Timing `transferSize`) | 934 B | 1596 B |
+| Bytes transferred (Rust, Resource Timing `transferSize`) | 934 B | 1140 B |
 | Requests (AS) | 1 | 1 |
-| Bytes transferred (AS) | 568 B | 972 B |
-| Decode time | ~1 ms | ~0.1–0.2 ms |
-| `WebAssembly.instantiate` | ~0.2–0.4 ms | ~0.3 ms |
-| Total time-to-first-`score_guess` | ~9–10 ms | ~9–10 ms |
+| Bytes transferred (AS) | 568 B | 690 B |
+| Decode time | ~0.1–2 ms | ~0.1–1 ms |
+| `WebAssembly.instantiate` | ~0.3–2.5 ms | ~0–2.1 ms |
+| Total time-to-first-`score_guess` | ~3–9 ms | ~7–12 ms |
 
-Two honesty notes on these numbers:
+Bytes transferred were stable across repeated runs (identical on 3
+consecutive measurements each); the decode/instantiate/total timings above
+show the full spread observed across those runs, not a single sample.
+
+**The conclusion does not flip: fetch still transfers fewer bytes for both
+engines**, even after fixing the compression gap — 934 B vs. 1140 B for
+Rust (+22%), 568 B vs. 690 B for AS (+21%), tracking the brotli expansion
+penalty from the size table above (+32.5% / +45.5%) minus a shared ~300 B
+fixed per-request overhead that Chrome's Resource Timing API adds to every
+`transferSize` regardless of body size. Two honesty notes that still stand:
 
 - **Request count is a tie here, not a win for inline** — in this unbundled
   demo, `engine-*.b64.js` is still its own network request, same as
@@ -254,11 +285,6 @@ Two honesty notes on these numbers:
   string is bundled directly into a JS file the page was already going to
   load (no separate wasm-shaped request at all); we didn't build a bundler
   step, so that scenario isn't reflected in the request-count row above.
-- **Bytes transferred for inline is uncompressed** — `serve.py` only
-  pre-compresses `.wasm` (`.wasm.br`/`.wasm.gz`), not `.js`, so the 1596 B /
-  972 B rows above are raw-over-the-wire. A real server/CDN that gzips text
-  assets (nearly universal) would transfer closer to the Gzip/Brotli
-  `.b64.js` rows in the size table above (880/840 B and 441/390 B) instead.
 - **Timings are localhost-understated, not a real speedup.** RTT ≈ 0 here, so
   inlining's actual advantage — skipping one network round trip — is worth
   ~1 RTT on a real network and ~nothing on localhost. Treat the timing rows

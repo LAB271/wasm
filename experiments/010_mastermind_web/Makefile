@@ -53,10 +53,20 @@ build-ui: ## Compile web/app.ts, web/inline.ts -> web/dist/*.js (tsc)
 	@# their top-level names (engineName, main, ...) in one shared scope.
 	cd web && npx tsc app.ts --target es2020 --module es2020 --lib es2020,dom --strict --outDir dist
 	cd web && npx tsc inline.ts --target es2020 --module es2020 --lib es2020,dom --strict --outDir dist
+	@# Pre-compress for HTTP serving (gzip + brotli) — same pattern as the wasm engines
+	gzip -9 -k -f web/dist/app.js web/dist/inline.js
+	@if command -v brotli >/dev/null 2>&1; then \
+		brotli -9 -k -f web/dist/app.js web/dist/inline.js; \
+	fi
 
 build-inline: build-rust build-as ## Base64-encode engine-*.wasm -> web/engine-*.b64.js (ES modules, for inline-loading demo)
 	@printf 'export const WASM_B64 = "%s";\n' "$$(base64 -i web/engine-rust.wasm | tr -d '\n')" > web/engine-rust.b64.js
 	@printf 'export const WASM_B64 = "%s";\n' "$$(base64 -i web/engine-as.wasm | tr -d '\n')" > web/engine-as.b64.js
+	@# Pre-compress for HTTP serving (gzip + brotli) — same pattern as the wasm engines
+	gzip -9 -k -f web/engine-rust.b64.js web/engine-as.b64.js
+	@if command -v brotli >/dev/null 2>&1; then \
+		brotli -9 -k -f web/engine-rust.b64.js web/engine-as.b64.js; \
+	fi
 
 # === Run ===
 
@@ -85,7 +95,8 @@ test-browser: build ## tests/browser.test.mjs — real headless Chrome, both eng
 
 clean: ## Remove all build output
 	rm -rf web/dist web/engine-rust.wasm web/engine-as.wasm web/engine-as.debug.wasm
-	rm -rf web/engine-*.wasm.gz web/engine-*.wasm.br web/engine-*.b64.js
+	rm -rf web/engine-*.wasm.gz web/engine-*.wasm.br
+	rm -rf web/engine-*.b64.js web/engine-*.b64.js.gz web/engine-*.b64.js.br
 	rm -rf engines/rust/target
 
 size: build ## Show WASM sizes (raw, gzip, brotli)
@@ -111,11 +122,23 @@ size: build ## Show WASM sizes (raw, gzip, brotli)
 	@printf "  %-20s %8s %8s %8s\n" \
 		"Rust (b64 inline)" \
 		"$$(wc -c < web/engine-rust.b64.js | tr -d ' ')B" \
-		"$$(gzip -9 -c web/engine-rust.b64.js | wc -c | tr -d ' ')B" \
-		"$$(command -v brotli >/dev/null 2>&1 && brotli -9 -c web/engine-rust.b64.js | wc -c | tr -d ' ' || echo 'N/A')B"
+		"$$(wc -c < web/engine-rust.b64.js.gz | tr -d ' ')B" \
+		"$$([ -f web/engine-rust.b64.js.br ] && wc -c < web/engine-rust.b64.js.br | tr -d ' ' || echo 'N/A')B"
 	@printf "  %-20s %8s %8s %8s\n" \
 		"AS (b64 inline)" \
 		"$$(wc -c < web/engine-as.b64.js | tr -d ' ')B" \
-		"$$(gzip -9 -c web/engine-as.b64.js | wc -c | tr -d ' ')B" \
-		"$$(command -v brotli >/dev/null 2>&1 && brotli -9 -c web/engine-as.b64.js | wc -c | tr -d ' ' || echo 'N/A')B"
+		"$$(wc -c < web/engine-as.b64.js.gz | tr -d ' ')B" \
+		"$$([ -f web/engine-as.b64.js.br ] && wc -c < web/engine-as.b64.js.br | tr -d ' ' || echo 'N/A')B"
+	@echo ""
+	@echo "  (below: compiled+compressed JS, same pre-compression pattern as the wasm/b64 rows above)"
+	@printf "  %-20s %8s %8s %8s\n" \
+		"dist/app.js" \
+		"$$(wc -c < web/dist/app.js | tr -d ' ')B" \
+		"$$(wc -c < web/dist/app.js.gz | tr -d ' ')B" \
+		"$$([ -f web/dist/app.js.br ] && wc -c < web/dist/app.js.br | tr -d ' ' || echo 'N/A')B"
+	@printf "  %-20s %8s %8s %8s\n" \
+		"dist/inline.js" \
+		"$$(wc -c < web/dist/inline.js | tr -d ' ')B" \
+		"$$(wc -c < web/dist/inline.js.gz | tr -d ' ')B" \
+		"$$([ -f web/dist/inline.js.br ] && wc -c < web/dist/inline.js.br | tr -d ' ' || echo 'N/A')B"
 	@echo ""
