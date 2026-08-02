@@ -1,4 +1,4 @@
-# 020 — JS vs WASM: where's the crossover?
+# 008 — JS vs WASM: where's the crossover?
 
 **Kind: Benchmark** (see root README "How to read these" — real numbers, same-session
 fairness, hypotheses marked from measured data, not illustrative).

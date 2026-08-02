@@ -188,6 +188,4 @@ by 60-70% on top of Rust's LTO. Components will benefit when Binaryen adds suppo
 
 ## Related
 
-- MVL crud_api example: `~/wc/mvl-lang/examples/crud_api/`
-- MVL WASM epic: mvl-lang/mvl#1571
 - Spin documentation: https://developer.fermyon.com/spin/v2/

@@ -1,6 +1,6 @@
 # Experiment 007 — Custom Minimal Runtime vs. Embedded Interpreter
 
-`mvl-lang/mvl-playground` doesn't embed an existing language interpreter into WASM at
+the MVL playground doesn't embed an existing language interpreter into WASM at
 all. It ships a hand-written JavaScript object (~60 functions: string/array/option/
 result/map operations) as a custom `"runtime"` import namespace that the compiled WASM
 module calls directly — a much lighter-weight strategy than embedding CPython

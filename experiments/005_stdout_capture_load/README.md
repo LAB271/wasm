@@ -6,7 +6,7 @@ a tight loop — 10, 1,000, and 100,000 — to find where the capture pipeline
 (`browser_wasi_shim`'s `ConsoleStdout.lineBuffered` → one `postMessage` per line →
 main-thread handling) costs something, and whether it's ever wrong.
 
-Directly exercises the mechanism `mvl-lang/mvl-playground`'s Runtime output pane
+Directly exercises the mechanism the MVL playground's Runtime output pane
 depends on, which is only manually spot-checked there today, never stress-tested.
 
 ## Hypotheses

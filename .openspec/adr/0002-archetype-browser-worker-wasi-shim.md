@@ -3,7 +3,7 @@
 > Exemplified by: [experiment 004](../../experiments/004_static_wasi_hello/),
 > [005](../../experiments/005_stdout_capture_load/),
 > [006](../../experiments/006_worker_kill_switch/).
-> This is `mvl-lang/mvl-playground`'s actual production architecture — 004 was
+> This is the MVL playground's actual production architecture — 004 was
 > built specifically to replicate it and measure it in isolation.
 
 ## System Context
@@ -92,7 +92,7 @@ flowchart TB
 Zero-marginal-cost hosting (static files, no backend to run or pay for), and the
 workload is either non-interactive (batch compute, one-shot transforms) or drives
 its own UI directly rather than reading a console. This is exactly
-`mvl-lang/mvl-playground`'s bet: ship the compiler's `--backend=wasm` output as a
+the MVL playground's bet: ship the compiler's `--backend=wasm` output as a
 static artifact, run it in a Worker, show the captured output. It stops being the
 right shape the moment the guest needs `stdin` for real, or needs to run longer
 than a few seconds under a caller that must be able to cancel it promptly.

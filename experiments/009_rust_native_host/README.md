@@ -5,7 +5,7 @@ a Go program embedding `wazero` (a pure-Go WASM runtime) as a library, loading a
 user-provided plugin, and calling it directly — no container, no HTTP, no
 subprocess. That's a genuinely different architecture from anything else in this
 repo. Every WASM host built so far here is either a browser Worker
-(experiments 004–008) or a pre-built server treated as a black box
+(experiments 004–007) or a pre-built server treated as a black box
 (`wasmtime serve`, `spin up` in 001/003). Nobody had embedded a WASM runtime as a
 library in a native process and called a function directly, in-process.
 
@@ -59,7 +59,7 @@ remaining 999 iterations: min=8-13us median=9-15us avg=10-15us max=18-101us
    `Transform` function does real work crossing the boundary: `malloc`, write
    input bytes into WASM linear memory, call, read output bytes back out. That
    marshalling cost is real and this experiment's payload doesn't pay it —
-   experiments 007 and 008 already measure that cost (handle-based string
+   experiment 007 already measures that cost (handle-based string
    marshalling) and it is not free. **This number isolates pure call overhead,
    not realistic call-with-data overhead** — a narrower, smaller thing than what
    the article measured, and it would be dishonest to present it as a direct

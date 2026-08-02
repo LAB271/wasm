@@ -2,7 +2,7 @@
 
 Every runtime in experiments 001–003 is launched by something before it can run: a
 container, `wasmtime serve`, or Playwright driving headless Chromium. This experiment
-tests the pattern `mvl-lang/mvl-playground` actually uses in production: a **static
+tests the pattern the MVL playground actually uses in production: a **static
 HTML page with no server involved at execution time at all**. A server only ever
 compiles source to WASM, once, ahead of time; a human opening a plain page is the
 entire runtime.

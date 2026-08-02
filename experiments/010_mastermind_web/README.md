@@ -357,12 +357,12 @@ loop (`allGuesses × poss`) issues up to ~1.68M `score_guess` calls per step. Me
 in Node on that exact call volume:
 
 V8's JS→WASM call overhead for a flat all-integer signature is low enough that it never
-dominates — [020](../020_js_vs_wasm_crossover/) later measured it at **~5.5 ns per
+dominates — [008](../008_js_vs_wasm_crossover/) later measured it at **~5.5 ns per
 crossing**. WASM wins on the compute itself, not by avoiding the boundary.
 
 **Corrected figure.** This section first published a 1.68x WASM advantage, measured
 against a "tuned switch" JS formulation. That formulation was not the fastest available.
-[020](../020_js_vs_wasm_crossover/) re-ran the same 1.68M-call workload across five JS
+[008](../008_js_vs_wasm_crossover/) re-ran the same 1.68M-call workload across five JS
 formulations, all parity-checked bit-for-bit against the WASM:
 
 | Implementation | 1.68M calls (median of 7) | vs WASM |
@@ -374,7 +374,7 @@ formulations, all parity-checked bit-for-bit against the WASM:
 | JS, naive (4 array allocations per call) | 51.5 ms | 3.39x |
 | WASM, `wasm-opt -O3` | 24.2 ms | 1.59x *slower than `-Oz`* |
 
-**The mechanism is deoptimization, not instruction count.** 020 re-ran the rematch under
+**The mechanism is deoptimization, not instruction count.** 008 re-ran the rematch under
 `node --trace-opt --trace-deopt`: the tuned-switch version **deoptimizes 20 times**,
 including mid-timed-round, because the switch chains never accumulate enough type
 feedback for TurboFan to commit. The bit-packed version has **zero** branches to
@@ -382,7 +382,7 @@ mis-speculate and **zero** deopt events. It isn't executing fewer instructions s
 never falling out of optimized code.
 
 **How close is it really?** Close enough that the direction depends on the harness. The
-direct rematch above puts WASM 1.14x ahead; 020's granularity sweep, calling one pair at
+direct rematch above puts WASM 1.14x ahead; 008's granularity sweep, calling one pair at
 a time through its batch entry point, puts bit-packed JS **1.3–1.5x ahead**. Per-element
 compute is ~5.5–6.2 ns for WASM against ~5.9–7.8 ns for JS. The honest reading is
 **parity**, not a win for either — and every measurement agrees the 1.68x is gone.
@@ -391,7 +391,7 @@ So the verdict is narrower than first written: **~3x the bytes for roughly break
 speed.** For manual play — ten calls per game — the WASM is pure overhead. For the
 solver, it is not a reason to ship a second toolchain.
 
-**What would actually make WASM win here is batching, not language choice.** 020 found
+**What would actually make WASM win here is batching, not language choice.** 008 found
 the crossover at **K≈4–16 pairs per call**: hand WASM sixteen pairs at once instead of
 one, and it pulls decisively ahead, because the ~5.5 ns crossing is amortized over real
 work. This experiment's solver calls `score_guess` one pair at a time — the worst

@@ -1,7 +1,7 @@
 # Experiment 011 — Mastermind CLI, real WASI stdin, `wasm32-wasip1`
 
 Direct answer to a specific question raised while building experiment 010: MVL's
-own `mvl build --backend=wasm` can't run `mvl-lang/mvl/examples/mastermind`'s
+own `mvl build --backend=wasm` can't run the MVL mastermind example's
 interactive CLI (`main.mvl`) because its `runtime` import namespace has no stdin at
 all — `stdin`/`read_line` are undefined under that backend, confirmed directly (see
 experiment 010's README). That's a gap in *MVL's specific WASM backend design*, not
@@ -14,7 +14,7 @@ WASI `fd_read` doing exactly what it's designed to do.
 
 - **`guest/`** — the Mastermind CLI itself, compiled to `wasm32-wasip1`. Not a fresh
   design: `score_guess`/`count_blacks`/`count_color_at_mismatch` are line-for-line
-  ports of `mvl-lang/mvl/examples/mastermind/code.mvl`'s algorithms (same
+  ports of the MVL mastermind example's algorithms (same
   mismatch-position restriction on both sides of the white-peg tally, same `min()`
   to avoid double-counting), and the game loop/prompts mirror `main.mvl`'s
   `read_guess`/`main` shape. Uses plain `std::io::stdin()` — under `wasm32-wasip1`
@@ -104,7 +104,7 @@ printf "1 2 3 4\n2 3 4 5\n" | wasmtime run guest/target/wasm32-wasip1/release/ma
 
 ## What this means for MVL
 
-Making `mvl-lang/mvl/examples/mastermind` (or any MVL program using `std.io.stdin`)
+Making the MVL mastermind example (or any MVL program using `std.io.stdin`)
 actually run under `--backend=wasm` would need: (1) wiring `fd_read` (and friends)
 into whatever host runs the compiled module — `mvl-playground`'s browser Worker
 currently has no stdin source to wire it to anyway, so this would need a different

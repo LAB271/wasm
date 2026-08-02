@@ -35,7 +35,7 @@ flowchart TB
 | Container | Path | Role |
 |-----------|------|------|
 | Guest module | 007: Rust → `wasm32-unknown-unknown`. 008/010: MVL source → `mvl build --backend=wasm` | Zero WASI imports. All non-trivial operations (even string concatenation) are calls into the custom namespace. |
-| Hand-written runtime | 007: 37 lines of JS. 008/010: `mvl-runtime.js`, a byte-faithful port of `mvl-lang/mvl-playground`'s own `web/src/runtime/mvl-runtime.ts` | This file **is** the ABI. There is no spec, no validator, no third party implementing this namespace anywhere else — it is exactly as correct as whoever wrote it made it. |
+| Hand-written runtime | 007: 37 lines of JS. 008/010: a byte-faithful port of the MVL playground's own runtime module | This file **is** the ABI. There is no spec, no validator, no third party implementing this namespace anywhere else — it is exactly as correct as whoever wrote it made it. |
 | Caller | 007: a Node script calling one exported function. 010: a UI click handler calling `score_guess()`/`color_name()` on demand, with no single "run" entry point at all | Decides when and how the guest's exports get invoked — this archetype has no equivalent of `_start`; a "library" module (010) may never run anything end-to-end, only answer individual function calls. |
 
 ## Two real shapes inside this one archetype
@@ -72,7 +72,7 @@ body of `score_guess` (a struct-returning function) and of a `for x in [array
 literal]` loop. A handle used as a raw memory address corrupts real module memory.
 
 **One instance of this bug had already been misfiled as a compiler bug**
-(`mvl-lang/mvl#2083`, "actor message routing crash") before being traced back to
+(an upstream compiler issue, "actor message routing crash") before being traced back to
 this exact ABI boundary and corrected. There is no framework here to catch this
 class of error — the entire memory-safety contract between guest and host is
 whatever the hand-written `runtime.js` happens to get right. See
@@ -85,7 +85,7 @@ string literals used only by `pub` functions never called from `main()` — the
 function still exports correctly, its `i32.const <ptr>` instructions still look
 right, they just point at nothing. Worked around with a small build-time patch
 script rather than blocked by it; the underlying gap is still open (flagged
-against `mvl-lang/mvl#2084`, not yet fixed upstream).
+against an upstream compiler issue, not yet fixed upstream).
 
 ## When this is the right shape
 

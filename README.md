@@ -23,7 +23,7 @@ SpiderMonkey). It is downloaded with the page and instantiated by JS.
   and bit-identical results across engines ([017](experiments/017_float_determinism/)).
 - **Experiments:** [004](experiments/004_static_wasi_hello/),
   [006](experiments/006_worker_kill_switch/), [010](experiments/010_mastermind_web/),
-  [020](experiments/020_js_vs_wasm_crossover/)
+  [008](experiments/008_js_vs_wasm_crossover/)
 
 ### 2. WASM server-side
 
@@ -91,7 +91,7 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [005](experiments/005_stdout_capture_load/) | stdout_capture_load | done | stdout/stderr capture correctness at scale |
 | [006](experiments/006_worker_kill_switch/) | worker_kill_switch | done | `Worker.terminate()` latency against infinite loops |
 | [007](experiments/007_custom_runtime_vs_interpreter/) | custom_runtime_vs_interpreter | done | Custom JS runtime vs componentize-py vs Pyodide |
-| [008](experiments/008_mvl_example_wasm_harness/) | mvl_example_wasm_harness | done | Standalone WASM host for MVL compiler output |
+| [008](experiments/008_js_vs_wasm_crossover/) | js_vs_wasm_crossover | done | Where WASM stops paying: rematches 010's 1.68x to parity (JS formulation matters more than language — deopts, not branches); marshal-vs-compute across scalars/arrays/strings/objects; batching crossover at K≈4-16 |
 | [009](experiments/009_rust_native_host/) | rust_native_host | done | Native Rust host embedding wasmtime directly |
 | [010](experiments/010_mastermind_web/) | mastermind_web | done | Browser WASM: Rust + AssemblyScript engines |
 | [011](experiments/011_mastermind_cli_wasi/) | mastermind_cli_wasi | done | CLI WASM with real WASI stdin/stdout |
@@ -103,7 +103,6 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [017](experiments/017_float_determinism/) | float_determinism | done | Cross-engine float determinism: JS `Math.*` vs WASM libm, ULP-level |
 | [018](experiments/018_wasm_platforms/) | wasm_platforms | done | Local-testability matrix across 4 container architectures (incl. verified podman+crun WASM-as-workload) and 4 platform runtimes; wasi-http portability demonstrated across 5 runtimes |
 | [019](experiments/019_wasm_debugging/) | wasm_debugging | done | Debuggability vs binary size — DWARF/name-section cost across 4 tiers; the other side of 010 |
-| [020](experiments/020_js_vs_wasm_crossover/) | js_vs_wasm_crossover | done | Where WASM stops paying: rematches 010's 1.68x to parity (JS formulation matters more than language — deopts, not branches); marshal-vs-compute across scalars/arrays/strings/objects; batching crossover at K≈4-16 |
 
 ### How to read these
 
@@ -112,7 +111,7 @@ different standard, so read the numbers accordingly:
 
 | Kind | Examples | Standard it's held to |
 |------|----------|----------------------|
-| **Benchmark** | 001, 002, 003, 014, 015, 016, 020 | Real numbers, same-session fairness, hypotheses marked from measured data |
+| **Benchmark** | 001, 002, 003, 008, 014, 015, 016 | Real numbers, same-session fairness, hypotheses marked from measured data |
 | **Mechanism explainer** | 010, 013, 019 | Show how it works; numbers are illustrative, the tradeoff is the deliverable |
 | **Correctness probe** | 005, 011, 017 | Does it behave as specified? Bit-exact where it matters, not perf-focused |
 | **Survey** | 018 | Verified-installable claims only; sources cited; what-I-ran kept separate from what-I-read |
@@ -187,7 +186,7 @@ own required/recommended split:**
 "Does WASM have an instruction for this?" is nearly the same question as "does IEEE-754
 require it?" Whatever it lacks, your guest must carry as code.
 
-Measured, on `wasm32-unknown-unknown` ([020](experiments/020_js_vs_wasm_crossover/),
+Measured, on `wasm32-unknown-unknown` ([008](experiments/008_js_vs_wasm_crossover/),
 [017](experiments/017_float_determinism/)):
 
 | Situation | Example | Consequence |

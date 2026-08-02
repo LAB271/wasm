@@ -105,7 +105,7 @@ is not in question.** Anything that fails is host- or toolchain-specific.
 
 ## 5. Findings — MVL `--backend=wasm` stdio
 
-Checked against `mvl-lang/mvl` at `55cd9e3d`. All claims below were reproduced
+Checked against the MVL compiler at `55cd9e3d`. All claims below were reproduced
 locally, not inferred.
 
 ### What works
@@ -194,13 +194,13 @@ cannot assemble unless it is in `WASM_CORPUS`, which only started validating in
 
 | Issue | State | Relation to the above |
 |---|---|---|
-| [mvl#2088](https://github.com/mvl-lang/mvl/issues/2088) | open | `feat: WASI fd_read + read_line for CLI/server WASM targets`. The ask is right. Its premise — "`stdin()` is a stub `Fd` value that never actually reads" — is wrong: it emits an invalid module, and the problem is not stdin-specific. [Corrected in-thread](https://github.com/mvl-lang/mvl/issues/2088#issuecomment-5143472803); now scoped to the `read_line` feature gap only. |
-| [mvl#2090](https://github.com/mvl-lang/mvl/issues/2090) | open | Filed from §5. The dangling-call bug: `Fd`-typed bindings emit `call $stdout` / `$stdin` against nothing. Blocks `stdout` too, independently of any WASI import. |
-| [mvl#2091](https://github.com/mvl-lang/mvl/issues/2091) | open | Filed from §5. Gate on assembly, not stubs — `wasm-stub-report` is structurally blind to dangling calls. |
-| [mvl#2084](https://github.com/mvl-lang/mvl/issues/2084) | open | Survey: 11 of 22 examples emit modules that cannot load. Listed mastermind's blocker as `$stdin` and asked for diagnosis, not a shim — [answered in-thread](https://github.com/mvl-lang/mvl/issues/2084#issuecomment-5143481805) and reclassified to #2090. Its category C (undeclared String locals) may share the same root cause. |
-| [mvl#2089](https://github.com/mvl-lang/mvl/issues/2089) | open | Spike: browser-hosting model, scoped around actors; explicit non-goal is stdin/console programs. Consistent with §2. |
-| [mvl#2076](https://github.com/mvl-lang/mvl/issues/2076) | closed | `read_file`/`FileRead` had no import or runtime shim — same shape, already fixed via the runtime crate. The precedent for how to fix `read_line`. |
-| [mvl#2066](https://github.com/mvl-lang/mvl/issues/2066) | closed | `Result::Err` limited to `String` payloads. |
+| upstream #2088 | open | `feat: WASI fd_read + read_line for CLI/server WASM targets`. The ask is right. Its premise — "`stdin()` is a stub `Fd` value that never actually reads" — is wrong: it emits an invalid module, and the problem is not stdin-specific. Corrected in-thread; now scoped to the `read_line` feature gap only. |
+| upstream #2090 | open | Filed from §5. The dangling-call bug: `Fd`-typed bindings emit `call $stdout` / `$stdin` against nothing. Blocks `stdout` too, independently of any WASI import. |
+| upstream #2091 | open | Filed from §5. Gate on assembly, not stubs — `wasm-stub-report` is structurally blind to dangling calls. |
+| upstream #2084 | open | Survey: 11 of 22 examples emit modules that cannot load. Listed mastermind's blocker as `$stdin` and asked for diagnosis, not a shim — answered in-thread and reclassified to #2090. Its category C (undeclared String locals) may share the same root cause. |
+| upstream #2089 | open | Spike: browser-hosting model, scoped around actors; explicit non-goal is stdin/console programs. Consistent with §2. |
+| upstream #2076 | closed | `read_file`/`FileRead` had no import or runtime shim — same shape, already fixed via the runtime crate. The precedent for how to fix `read_line`. |
+| upstream #2066 | closed | `Result::Err` limited to `String` payloads. |
 | mvl#2014 / #2081 | merged | funcref table + `call_indirect` for List HOFs; corpus validation and the stub report. |
 
 ### Recommended fix direction
@@ -222,10 +222,10 @@ Independently of either, two things are worth fixing because they are cheap and
 they are why this stayed invisible — both now filed:
 
 - Make the `struct_layouts.get("Fd")` miss a hard error rather than a silent
-  fallthrough to generic call emission — [#2090](https://github.com/mvl-lang/mvl/issues/2090).
+  fallthrough to generic call emission — upstream #2090.
 - Gate on assembly, not just on stubs — `wasm-tools parse` every emitted module,
   including examples, and fail the build on a dangling reference —
-  [#2091](https://github.com/mvl-lang/mvl/issues/2091).
+  upstream #2091.
 
 ---
 

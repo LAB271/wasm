@@ -1,2 +1,0 @@
-in_bounds: correct (found 20)
-out_of_bounds: correct (default -1)

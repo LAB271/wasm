@@ -1,6 +1,6 @@
 # Experiment 006 — Worker.terminate() as a Kill Switch
 
-`mvl-lang/mvl-playground` trusts a single mechanism to stop a runaway user program: a
+the MVL playground trusts a single mechanism to stop a runaway user program: a
 5-second client-side timeout that calls `Worker.terminate()`. This experiment builds
 the hostile case that mechanism is supposed to handle — a genuinely unconditional WASM
 loop, no exit condition, no yield point — and finds out what `terminate()` actually
