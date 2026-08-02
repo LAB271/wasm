@@ -55,23 +55,23 @@ def handle(request):
 
 | Metric | Leg 1 Flask/Podman | Leg 2a Pyodide/Node | Leg 2b Pyodide/Chrome | Leg 2c Pyodide/Playwright | Leg 3 Wasmtime |
 |---|---|---|---|---|---|
-| Artifact size | | | | | |
-| Cold start (ms) | | | | | |
-| Memory RSS (MB) | | | | | |
-| hey p50 (ms) | | | | | |
-| hey p99 (ms) | | | | | |
-| hey req/s | | | | | |
+| Artifact size | 155MB | 53MB | 52MB | 533MB | 132KB |
+| Cold start (ms) | 54 | 1694 | 5837 | 5154 | 43 |
+| Memory RSS (MB) | ? | 224 | 1109 | 599 | 20 |
+| hey p50 (ms) | 0.9 | 0.1 | 0.3 | 0.4 | 0.1 |
+| hey p99 (ms) | 4.1 | 3.0 | 1.6 | 1.8 | 0.8 |
+| hey req/s | 1062 | 6427 | 2560 | 2299 | 6706 |
 
 ### Postgres DB query (legs 4a/4b/4c)
 
 | Metric | Leg 4a Flask+psycopg2 | Leg 4b Pyodide+pg bridge | Leg 4c Wasmtime+sidecar |
 |---|---|---|---|
-| Artifact size | | | |
-| Cold start (ms) | | | |
-| Memory RSS (MB) | | | |
-| hey p50 (ms) | | | |
-| hey p99 (ms) | | | |
-| hey req/s | | | |
+| Artifact size | 18MB | 14MB | 152KB+824KB |
+| Cold start (ms) | 1962 | 1315 | 46 |
+| Memory RSS (MB) | 63 | 220 | 100 |
+| hey p50 (ms) | 1.0 | 0.5 | 0.8 |
+| hey p99 (ms) | 3.6 | 2.0 | 2.7 |
+| hey req/s | 923 | 1863 | 1183 |
 
 ---
 
