@@ -19,17 +19,20 @@ wasm-tools parse guests/wat/externref.wat   -o "$OUT/wat_externref.wasm"
 # ─── Leg 2: Rust, manual ptr+len ───────────────────────────────────────────────
 echo ""
 echo "Leg 2: Rust manual..."
-cargo build --manifest-path guests/rust_manual/Cargo.toml \
-    --release --target wasm32-unknown-unknown
-cp guests/rust_manual/target/wasm32-unknown-unknown/release/collections_manual.wasm \
-   "$OUT/rust_manual.wasm"
-# Same crate without `std`'s hash collections, so the README can quote what
-# HashMap + HashSet actually cost a guest binary.
+# Two artifacts from one crate, so the README can quote what HashMap + HashSet
+# actually cost a guest binary (see "Guest binary size").
+#
+# Toggling features forces a full recompile — cargo cannot cache both feature
+# sets in one target dir — so the order matters: build the no-hash variant
+# FIRST and the default one LAST, and the default build is left in place for
+# the harness without a third rebuild to restore it.
+echo "  (a) --no-default-features  -> rust_manual_nohash.wasm  [size baseline]"
 cargo build --manifest-path guests/rust_manual/Cargo.toml --no-default-features \
     --release --target wasm32-unknown-unknown
 cp guests/rust_manual/target/wasm32-unknown-unknown/release/collections_manual.wasm \
    "$OUT/rust_manual_nohash.wasm"
-# Restore the default-featured build as the one the harness loads.
+
+echo "  (b) default features       -> rust_manual.wasm         [the harness loads this]"
 cargo build --manifest-path guests/rust_manual/Cargo.toml \
     --release --target wasm32-unknown-unknown
 cp guests/rust_manual/target/wasm32-unknown-unknown/release/collections_manual.wasm \
