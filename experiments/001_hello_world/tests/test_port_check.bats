@@ -11,38 +11,25 @@ setup() {
 }
 
 @test "require_port_free fails when port is occupied" {
-  python3 -c "
-import socket, time
-s = socket.socket()
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(('127.0.0.1', 59301))
-s.listen(1)
-time.sleep(10)
-" &
+  # Use nc (netcat) instead of Python — faster startup
+  nc -l 59301 &
   listener_pid=$!
-  sleep 0.3
+  sleep 0.1
 
   run require_port_free 59301 "occupied-port-test"
-  kill "$listener_pid" 2>/dev/null; wait "$listener_pid" 2>/dev/null || true
+  kill "$listener_pid" 2>/dev/null || true
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"already in use"* ]]
 }
 
 @test "require_port_free error message includes label" {
-  python3 -c "
-import socket, time
-s = socket.socket()
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(('127.0.0.1', 59302))
-s.listen(1)
-time.sleep(10)
-" &
+  nc -l 59302 &
   listener_pid=$!
-  sleep 0.3
+  sleep 0.1
 
   run require_port_free 59302 "my-label"
-  kill "$listener_pid" 2>/dev/null; wait "$listener_pid" 2>/dev/null || true
+  kill "$listener_pid" 2>/dev/null || true
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"my-label"* ]]
