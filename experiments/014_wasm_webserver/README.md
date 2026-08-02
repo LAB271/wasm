@@ -25,22 +25,25 @@ Leg A (TCP) will be:
 
 This experiment builds incrementally:
 
-1. **Phase 1:** ✅ Read-only, CSV → in-memory HashMap, JSON responses
-2. **Phase 2:** ⏸️ Deferred — SQLite crates for WASM/WASI are still maturing for wasip2
+1. **Phase 1:** ✅ Read-only, CSV → in-memory storage, JSON responses
+2. **Phase 2:** ✅ Embedded SQLite via rusqlite (Leg A only)
 3. **Phase 3:** ✅ Full CRUD operations (GET/POST/PUT/DELETE)
 
-### Phase 2 Status (SQLite)
+### Phase 2: SQLite in WASM
 
-Attempted integrations:
-- `rusqlite` with `bundled` feature — requires WASI SDK for C compilation
-- `rusqlite` with `ffi-sqlite-wasm-rs` — targets `wasm32-unknown-unknown`, not wasip2
-- `sqlite-wasm-wasi` — API incompatibilities with wasip2 target
+Leg A uses **embedded SQLite** via `rusqlite` with the `bundled` feature. This
+compiles SQLite from C source into the WASM module.
 
-The HashMap-based approach works well for this experiment. For production WASM
-workloads needing persistence, consider:
-- Spin's built-in key-value store (`spin_sdk::key_value`)
-- External database via HTTP (Turso, PlanetScale)
-- Wait for better WASI SQLite support
+**Requirements:**
+- WASI SDK installed at `/opt/wasi-sdk` (provides C compiler for wasm32-wasip2)
+- Download from: https://github.com/WebAssembly/wasi-sdk/releases
+
+**Size impact:**
+- Without SQLite: ~148 KB
+- With SQLite: ~1.1 MB
+
+Leg B (serverless) still uses HashMap — in serverless model, state resets each
+request anyway unless you use Spin's key-value store or an external database.
 
 ## Structure
 

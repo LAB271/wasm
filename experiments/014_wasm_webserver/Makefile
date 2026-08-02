@@ -16,8 +16,18 @@ help: ## Show this help
 
 build: build-a build-b ## Build both legs
 
-build-a: ## Build Leg A (TCP server)
-	cd leg_a_tcp && cargo build --release --target wasm32-wasip2
+build-a: ## Build Leg A (TCP server with SQLite)
+	@# SQLite bundled requires WASI SDK for C compilation
+	@if [ -d /opt/wasi-sdk ]; then \
+		export WASI_SDK_PATH=/opt/wasi-sdk && \
+		export CC="$${WASI_SDK_PATH}/bin/clang" && \
+		export AR="$${WASI_SDK_PATH}/bin/llvm-ar" && \
+		export CFLAGS="--sysroot=$${WASI_SDK_PATH}/share/wasi-sysroot" && \
+		cd leg_a_tcp && cargo build --release --target wasm32-wasip2; \
+	else \
+		echo "Warning: WASI SDK not found at /opt/wasi-sdk — SQLite build may fail"; \
+		cd leg_a_tcp && cargo build --release --target wasm32-wasip2; \
+	fi
 	@if command -v wasm-tools >/dev/null 2>&1; then \
 		wasm-tools strip leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm \
 			-o leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm; \

@@ -1,15 +1,15 @@
 //! Leg A: Full TCP server in WASM using wasi:sockets.
 //!
+//! Phase 2: Uses embedded SQLite (via rusqlite with bundled feature).
 //! Phase 3: Supports full CRUD operations (GET/POST/PUT/DELETE).
-//!
-//! Note: Phase 2 (SQLite) deferred — WASM SQLite crates are still maturing
-//! for wasip2. The HashMap-based approach works for this experiment.
 //!
 //! This demonstrates the "WASM owns the socket" model — the guest module
 //! binds, listens, accepts, reads, and writes directly.
+//!
+//! Requires: WASI SDK installed at /opt/wasi-sdk (for SQLite C compilation)
 
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::sync::Mutex;
@@ -30,98 +30,129 @@ struct RecordInput {
 }
 
 struct Database {
-    records: Mutex<HashMap<u32, Record>>,
-    next_id: Mutex<u32>,
+    conn: Mutex<Connection>,
 }
 
 impl Database {
     fn new() -> Self {
+        let conn = Connection::open_in_memory().expect("Failed to open SQLite in memory");
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                department TEXT NOT NULL
+            )",
+            [],
+        )
+        .expect("Failed to create table");
+
         Database {
-            records: Mutex::new(HashMap::new()),
-            next_id: Mutex::new(1),
+            conn: Mutex::new(conn),
         }
     }
 
     fn load_csv(&self, csv_content: &str) {
-        let mut records = self.records.lock().unwrap();
-        let mut next_id = self.next_id.lock().unwrap();
-        let mut max_id = 0u32;
-
+        let conn = self.conn.lock().unwrap();
         for line in csv_content.lines().skip(1) {
             let parts: Vec<&str> = line.split(',').collect();
             if parts.len() >= 4 {
-                if let Ok(id) = parts[0].parse::<u32>() {
-                    records.insert(
-                        id,
-                        Record {
-                            id,
-                            name: parts[1].to_string(),
-                            email: parts[2].to_string(),
-                            department: parts[3].to_string(),
-                        },
+                if let Ok(id) = parts[0].parse::<i64>() {
+                    let _ = conn.execute(
+                        "INSERT OR REPLACE INTO records (id, name, email, department) VALUES (?1, ?2, ?3, ?4)",
+                        params![id, parts[1], parts[2], parts[3]],
                     );
-                    if id > max_id {
-                        max_id = id;
-                    }
                 }
             }
         }
-        *next_id = max_id + 1;
     }
 
     fn all(&self) -> Vec<Record> {
-        let records = self.records.lock().unwrap();
-        let mut v: Vec<_> = records.values().cloned().collect();
-        v.sort_by_key(|r| r.id);
-        v
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT id, name, email, department FROM records ORDER BY id")
+            .unwrap();
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(Record {
+                    id: row.get::<_, i64>(0)? as u32,
+                    name: row.get(1)?,
+                    email: row.get(2)?,
+                    department: row.get(3)?,
+                })
+            })
+            .unwrap();
+        rows.filter_map(|r| r.ok()).collect()
     }
 
     fn get(&self, id: u32) -> Option<Record> {
-        let records = self.records.lock().unwrap();
-        records.get(&id).cloned()
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT id, name, email, department FROM records WHERE id = ?1",
+            params![id as i64],
+            |row| {
+                Ok(Record {
+                    id: row.get::<_, i64>(0)? as u32,
+                    name: row.get(1)?,
+                    email: row.get(2)?,
+                    department: row.get(3)?,
+                })
+            },
+        )
+        .ok()
     }
 
-    fn create(&self, input: &RecordInput) -> Record {
-        let mut records = self.records.lock().unwrap();
-        let mut next_id = self.next_id.lock().unwrap();
-
-        let id = *next_id;
-        *next_id += 1;
-
-        let record = Record {
+    fn create(&self, input: &RecordInput) -> Option<Record> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO records (name, email, department) VALUES (?1, ?2, ?3)",
+            params![&input.name, &input.email, &input.department],
+        )
+        .ok()?;
+        let id = conn.last_insert_rowid() as u32;
+        Some(Record {
             id,
             name: input.name.clone(),
             email: input.email.clone(),
             department: input.department.clone(),
-        };
-        records.insert(id, record.clone());
-        record
+        })
     }
 
     fn update(&self, id: u32, input: &RecordInput) -> Option<Record> {
-        let mut records = self.records.lock().unwrap();
-        if records.contains_key(&id) {
-            let record = Record {
+        let conn = self.conn.lock().unwrap();
+        let rows = conn
+            .execute(
+                "UPDATE records SET name = ?1, email = ?2, department = ?3 WHERE id = ?4",
+                params![&input.name, &input.email, &input.department, id as i64],
+            )
+            .unwrap_or(0);
+        if rows > 0 {
+            Some(Record {
                 id,
                 name: input.name.clone(),
                 email: input.email.clone(),
                 department: input.department.clone(),
-            };
-            records.insert(id, record.clone());
-            Some(record)
+            })
         } else {
             None
         }
     }
 
     fn delete(&self, id: u32) -> bool {
-        let mut records = self.records.lock().unwrap();
-        records.remove(&id).is_some()
+        let conn = self.conn.lock().unwrap();
+        let rows = conn
+            .execute("DELETE FROM records WHERE id = ?1", params![id as i64])
+            .unwrap_or(0);
+        rows > 0
     }
 
     fn count(&self) -> usize {
-        let records = self.records.lock().unwrap();
-        records.len()
+        let conn = self.conn.lock().unwrap();
+        conn.query_row("SELECT COUNT(*) FROM records", [], |row| {
+            row.get::<_, i64>(0)
+        })
+        .unwrap_or(0) as usize
     }
 }
 
@@ -155,17 +186,14 @@ fn handle_request(db: &Database, request: &str) -> (u16, &'static str, String) {
     let path = parts[1];
 
     match (method, path) {
-        // Health check
-        ("GET", "/health") => (200, "OK", r#"{"status":"ok"}"#.to_string()),
+        ("GET", "/health") => (200, "OK", r#"{"status":"ok","db":"sqlite"}"#.to_string()),
 
-        // List all records
         ("GET", "/records") => {
             let records = db.all();
             let json = serde_json::to_string(&records).unwrap_or_else(|_| "[]".to_string());
             (200, "OK", json)
         }
 
-        // Get single record
         ("GET", path) if path.starts_with("/records/") => {
             let id_str = path.trim_start_matches("/records/");
             match id_str.parse::<u32>() {
@@ -181,16 +209,21 @@ fn handle_request(db: &Database, request: &str) -> (u16, &'static str, String) {
             }
         }
 
-        // Create new record (POST /records)
         ("POST", "/records") => {
             if let Some(body) = parse_body(request) {
                 match serde_json::from_str::<RecordInput>(body) {
-                    Ok(input) => {
-                        let record = db.create(&input);
-                        let json =
-                            serde_json::to_string(&record).unwrap_or_else(|_| "{}".to_string());
-                        (201, "Created", json)
-                    }
+                    Ok(input) => match db.create(&input) {
+                        Some(record) => {
+                            let json =
+                                serde_json::to_string(&record).unwrap_or_else(|_| "{}".to_string());
+                            (201, "Created", json)
+                        }
+                        None => (
+                            500,
+                            "Internal Server Error",
+                            r#"{"error":"insert failed"}"#.to_string(),
+                        ),
+                    },
                     Err(_) => (400, "Bad Request", r#"{"error":"invalid json"}"#.to_string()),
                 }
             } else {
@@ -198,7 +231,6 @@ fn handle_request(db: &Database, request: &str) -> (u16, &'static str, String) {
             }
         }
 
-        // Update existing record (PUT /records/:id)
         ("PUT", path) if path.starts_with("/records/") => {
             let id_str = path.trim_start_matches("/records/");
             match id_str.parse::<u32>() {
@@ -227,7 +259,6 @@ fn handle_request(db: &Database, request: &str) -> (u16, &'static str, String) {
             }
         }
 
-        // Delete record (DELETE /records/:id)
         ("DELETE", path) if path.starts_with("/records/") => {
             let id_str = path.trim_start_matches("/records/");
             match id_str.parse::<u32>() {
@@ -247,7 +278,7 @@ fn handle_request(db: &Database, request: &str) -> (u16, &'static str, String) {
 }
 
 fn handle_connection(db: &Database, mut stream: TcpStream) {
-    let mut buf = [0u8; 8192]; // Larger buffer for POST bodies
+    let mut buf = [0u8; 8192];
     let mut request = String::new();
 
     match std::io::Read::read(&mut stream, &mut buf) {
@@ -289,15 +320,13 @@ fn handle_connection(db: &Database, mut stream: TcpStream) {
 
 #[no_mangle]
 pub extern "C" fn _start() {
-    // Initialize database
+    eprintln!("Initializing SQLite database...");
     let db = Database::new();
 
-    // Load initial data from CSV
     let csv = load_csv();
     db.load_csv(&csv);
-    eprintln!("Loaded {} records", db.count());
+    eprintln!("Loaded {} records into SQLite", db.count());
 
-    // Bind and listen
     let addr = "0.0.0.0:8080";
     let listener = match TcpListener::bind(addr) {
         Ok(l) => l,
@@ -308,7 +337,6 @@ pub extern "C" fn _start() {
     };
     eprintln!("Listening on {}", addr);
 
-    // Accept loop
     for stream in listener.incoming() {
         match stream {
             Ok(s) => handle_connection(&db, s),
