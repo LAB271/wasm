@@ -12,12 +12,9 @@
 //!   - db_count() -> i32
 
 #![no_std]
+#![allow(static_mut_refs)] // Bump allocator uses static mut intentionally
 
 extern crate alloc;
-
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
 
 // Host imports
 extern "C" {

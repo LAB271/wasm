@@ -11,7 +11,3 @@ opt-level = "z"
 lto = true
 panic = "abort"
 strip = true
-
-# Allow undefined symbols (they're host imports)
-[target.wasm32-unknown-unknown]
-rustflags = ["-C", "link-arg=--allow-undefined"]
