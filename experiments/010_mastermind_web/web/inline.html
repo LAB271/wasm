@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Mastermind — fetch vs inline WASM</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+<link rel="icon" href="data:," />
+</head>
+<body>
+  <main>
+    <header>
+      <h1>FETCH<span class="wasm-badge">vs</span>INLINE</h1>
+      <p class="tagline">
+        Loads <code>engine-<span id="engine-name">rust</span>.wasm</code> two ways — a plain
+        <code>fetch()</code> of the binary, and a base64 string inlined into an ES module
+        (<code>engine-*.b64.js</code>) — and measures both. Switch engine with
+        <code>?engine=rust|as</code>.
+      </p>
+    </header>
+
+    <section id="solver-bar">
+      <div id="solver-controls">
+        <button id="run-btn">Run comparison</button>
+      </div>
+      <div id="strategy-desc">
+        Request count and bytes transferred are the numbers that generalize to a real network.
+        Timings here are <strong>localhost</strong> — RTT ≈ 0, so any speedup shown is noise, not
+        a real-network result. See README for the honest read.
+      </div>
+    </section>
+
+    <section id="board" aria-label="Comparison results">
+      <div id="results">running…</div>
+    </section>
+
+    <section id="solver-bar">
+      <div id="strategy-desc">
+        <strong>Correctness check</strong> — runs several <code>score_guess</code> calls through
+        both the fetch-loaded and inline-loaded modules and diffs the results, proving the
+        inlined module genuinely works rather than just having loaded.
+      </div>
+      <div id="parity"></div>
+    </section>
+
+    <section id="solver-bar">
+      <div id="solver-controls">
+        <label for="foreign-port">Foreign-origin port:</label>
+        <input id="foreign-port" type="text" value="8011" size="6" />
+        <button id="cors-btn">Test cross-origin fetch</button>
+      </div>
+      <div id="strategy-desc">
+        Simulates the wasm binary living on a different host than this page (e.g. a CDN, or a
+        second <code>serve.py</code> instance). Run a second server on the port above — with
+        <code>--no-cors</code> the cross-origin <code>fetch()</code> is blocked; without it, it
+        succeeds. The inline path never contacts that host at all, so it is unaffected either way.
+      </div>
+      <div id="cors-result"></div>
+    </section>
+  </main>
+
+  <script type="module" src="dist/inline.js"></script>
+  <script>
+    document.getElementById("engine-name").textContent =
+      new URLSearchParams(location.search).get("engine") === "as" ? "as" : "rust";
+  </script>
+</body>
+</html>

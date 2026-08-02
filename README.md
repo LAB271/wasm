@@ -43,6 +43,8 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 - WASM runs in browser via `WebAssembly.instantiate()` — no server round-trips after initial load
 - Ideal for compute-heavy UI (games, codecs, crypto) where latency matters
 - Example: [010](experiments/010_mastermind_web/) — Mastermind scoring in 950-byte WASM
+- Loading strategy: `fetch()` the binary, or base64-inline it into a JS module
+  to dodge CORS/MIME/`file://` issues — see 010's fetch-vs-inline measurements
 
 **Server-side (wasmtime)**
 - Embed wasmtime as a library — single process, no container overhead

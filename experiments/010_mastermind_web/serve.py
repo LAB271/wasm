@@ -10,6 +10,14 @@ Supports HTTP compression:
   - Serves pre-compressed .wasm.br (brotli) or .wasm.gz (gzip) when available
   - Compresses JSON API responses with gzip
 
+CORS: sends Access-Control-Allow-Origin (+ Methods/Headers) on every response
+and answers OPTIONS preflight, so a page on one instance can fetch() a .wasm
+served by another (see web/inline.html's cross-origin demo). Pass --no-cors
+to omit those headers and demonstrate the blocked case instead — this is
+precisely the failure the base64-inline loading strategy sidesteps, since the
+inlined module rides along as part of the page's own same-origin JS and never
+issues that cross-origin request in the first place.
+
 Repeats the exp004/006 lesson learned the hard way earlier in this repo's
 history: serve from THIS script's own directory, not the caller's cwd —
 `os.path.dirname(os.path.abspath(__file__))` regardless of where the script
@@ -18,6 +26,9 @@ was invoked from.
 API endpoints for CLI play:
   POST /api/new    -> {"game_id": "...", "message": "..."}
   POST /api/guess  -> {"guess": [1,2,3,4]} -> {"blacks": N, "whites": N, "won": bool, "attempts": N}
+
+Usage:
+  python3 serve.py [port] [--no-cors]
 """
 import gzip
 import http.server
@@ -28,6 +39,9 @@ import sys
 from urllib.parse import urlparse
 
 web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+
+# Set from argv in __main__ (module-level so Handler methods can read it).
+cors_enabled = True
 
 # Game state (single game for simplicity)
 current_game = {"secret": None, "attempts": 0, "max_attempts": 10}
@@ -57,6 +71,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         **http.server.SimpleHTTPRequestHandler.extensions_map,
         ".wasm": "application/wasm",
     }
+
+    def end_headers(self):
+        """Single choke point for every response path (do_GET's default
+        handling, _serve_compressed, and the JSON API) — add CORS headers
+        here rather than duplicating them at each send_response call site."""
+        if cors_enabled:
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        super().end_headers()
+
+    def do_OPTIONS(self):
+        """Answer CORS preflight requests (browsers send these ahead of
+        cross-origin POSTs with a JSON content-type, among other cases)."""
+        self.send_response(204)
+        self.end_headers()
 
     def do_GET(self):
         """Serve pre-compressed .wasm files when client accepts them."""
@@ -168,5 +198,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8010
+    args = sys.argv[1:]
+    cors_enabled = "--no-cors" not in args
+    port_args = [a for a in args if a != "--no-cors"]
+    port = int(port_args[0]) if port_args else 8010
     http.server.test(HandlerClass=Handler, port=port, bind="127.0.0.1")

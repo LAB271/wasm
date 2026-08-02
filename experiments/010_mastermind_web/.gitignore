@@ -1,4 +1,5 @@
 # node_modules/, package-lock.json already covered by repo-root .gitignore.
 web/engine-*.wasm
+web/engine-*.b64.js
 web/dist/
 engines/rust/target/

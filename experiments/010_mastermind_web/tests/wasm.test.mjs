@@ -58,6 +58,37 @@ for (let i = 0; i < 200; i++) {
   }
 }
 
+// Regression guard for `make build-inline` (web/engine-*.b64.js): each
+// base64 string must decode to bytes byte-identical to the .wasm it was
+// generated from, and the decoded module must instantiate and score
+// identically to the real .wasm file. Catches a stale or corrupted
+// base64 build step.
+for (const name of ["rust", "as"]) {
+  const wasmBytes = await readFile(`${root}web/engine-${name}.wasm`);
+  const { WASM_B64 } = await import(`${root}web/engine-${name}.b64.js`);
+  const decoded = Buffer.from(WASM_B64, "base64");
+
+  if (!decoded.equals(wasmBytes)) {
+    failures++;
+    console.error(`FAIL [${name}] engine-${name}.b64.js does not decode to byte-identical engine-${name}.wasm (${decoded.length}B vs ${wasmBytes.length}B)`);
+    continue;
+  }
+  console.log(`ok  [${name}] engine-${name}.b64.js decodes byte-identical to engine-${name}.wasm`);
+
+  const { instance } = await WebAssembly.instantiate(decoded, {});
+  const inlineScore = instance.exports.score_guess;
+  for (const { secret, guess, expect } of CASES) {
+    const got = unpack(inlineScore(...secret, ...guess));
+    try {
+      assert.deepEqual(got, expect);
+      console.log(`ok  [${name} b64] secret=${secret} guess=${guess} -> ${JSON.stringify(got)}`);
+    } catch {
+      failures++;
+      console.error(`FAIL [${name} b64] secret=${secret} guess=${guess} -> got ${JSON.stringify(got)}, want ${JSON.stringify(expect)}`);
+    }
+  }
+}
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);

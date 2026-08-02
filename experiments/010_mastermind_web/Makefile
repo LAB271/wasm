@@ -2,7 +2,7 @@ SHELL := /bin/bash
 PORT ?= 8010
 ENGINE ?= rust
 
-.PHONY: help build build-rust build-as build-ui run test test-unit test-browser clean
+.PHONY: help build build-rust build-as build-ui build-inline run test test-unit test-browser clean
 
 .DEFAULT_GOAL := help
 
@@ -16,7 +16,7 @@ help: ## Show this help
 
 # === Build ===
 
-build: build-rust build-as build-ui ## Build both engines and the UI
+build: build-rust build-as build-ui build-inline ## Build both engines, the UI, and inline-base64 variants
 
 build-rust: ## Compile engines/rust -> web/engine-rust.wasm (cargo, wasm32-unknown-unknown)
 	cd engines/rust && cargo build --target wasm32-unknown-unknown --release
@@ -43,12 +43,20 @@ build-as: ## Compile engines/assemblyscript -> web/engine-as.wasm (asc)
 		brotli -9 -k -f web/engine-as.wasm; \
 	fi
 
-build-ui: ## Compile web/app.ts -> web/dist/app.js (tsc)
+build-ui: ## Compile web/app.ts, web/inline.ts -> web/dist/*.js (tsc)
 	@if [ ! -d web/node_modules ]; then \
 		echo "  (first run — installing web/ deps)"; \
 		cd web && npm install --no-audit --no-fund; \
 	fi
+	@# Separate invocations: neither file has top-level import/export, so tsc
+	@# treats each as a global script — compiling them together would collide
+	@# their top-level names (engineName, main, ...) in one shared scope.
 	cd web && npx tsc app.ts --target es2020 --module es2020 --lib es2020,dom --strict --outDir dist
+	cd web && npx tsc inline.ts --target es2020 --module es2020 --lib es2020,dom --strict --outDir dist
+
+build-inline: build-rust build-as ## Base64-encode engine-*.wasm -> web/engine-*.b64.js (ES modules, for inline-loading demo)
+	@printf 'export const WASM_B64 = "%s";\n' "$$(base64 -i web/engine-rust.wasm | tr -d '\n')" > web/engine-rust.b64.js
+	@printf 'export const WASM_B64 = "%s";\n' "$$(base64 -i web/engine-as.wasm | tr -d '\n')" > web/engine-as.b64.js
 
 # === Run ===
 
@@ -77,7 +85,7 @@ test-browser: build ## tests/browser.test.mjs — real headless Chrome, both eng
 
 clean: ## Remove all build output
 	rm -rf web/dist web/engine-rust.wasm web/engine-as.wasm web/engine-as.debug.wasm
-	rm -rf web/engine-*.wasm.gz web/engine-*.wasm.br
+	rm -rf web/engine-*.wasm.gz web/engine-*.wasm.br web/engine-*.b64.js
 	rm -rf engines/rust/target
 
 size: build ## Show WASM sizes (raw, gzip, brotli)
@@ -98,4 +106,16 @@ size: build ## Show WASM sizes (raw, gzip, brotli)
 		"$$(wc -c < web/engine-as.wasm | tr -d ' ')B" \
 		"$$(wc -c < web/engine-as.wasm.gz | tr -d ' ')B" \
 		"$$([ -f web/engine-as.wasm.br ] && wc -c < web/engine-as.wasm.br | tr -d ' ' || echo 'N/A')B"
+	@echo ""
+	@echo "  (below: base64-inlined ES modules — see README 'fetch vs inline' section)"
+	@printf "  %-20s %8s %8s %8s\n" \
+		"Rust (b64 inline)" \
+		"$$(wc -c < web/engine-rust.b64.js | tr -d ' ')B" \
+		"$$(gzip -9 -c web/engine-rust.b64.js | wc -c | tr -d ' ')B" \
+		"$$(command -v brotli >/dev/null 2>&1 && brotli -9 -c web/engine-rust.b64.js | wc -c | tr -d ' ' || echo 'N/A')B"
+	@printf "  %-20s %8s %8s %8s\n" \
+		"AS (b64 inline)" \
+		"$$(wc -c < web/engine-as.b64.js | tr -d ' ')B" \
+		"$$(gzip -9 -c web/engine-as.b64.js | wc -c | tr -d ' ')B" \
+		"$$(command -v brotli >/dev/null 2>&1 && brotli -9 -c web/engine-as.b64.js | wc -c | tr -d ' ' || echo 'N/A')B"
 	@echo ""

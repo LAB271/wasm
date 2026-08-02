@@ -396,3 +396,24 @@ header h1 {
 #overlay-title.win { color: var(--good); }
 #overlay-title.lose { color: var(--bad); }
 #overlay-body { color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPARISON TABLE (web/inline.html — fetch vs inline-base64 loading)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.compare-table th, .compare-table td {
+  text-align: left;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+.compare-table th { color: var(--muted); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.compare-table tr.fail { color: var(--bad); }
+.compare-table tr.pass td:last-child { color: var(--good); }
+
+p.pass { color: var(--good); }
+p.fail { color: var(--bad); }

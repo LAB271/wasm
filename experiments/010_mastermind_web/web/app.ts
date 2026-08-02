@@ -96,7 +96,15 @@ function engineName(): "rust" | "as" {
 async function loadWasm(engine?: "rust" | "as"): Promise<void> {
   const name = engine ?? engineName();
   currentEngine = name;
-  const bytes = await fetch(`engine-${name}.wasm`).then((r) => r.arrayBuffer());
+  // ?inline=1 loads the base64-inlined module instead of fetch()ing the
+  // .wasm binary — see web/inline.ts for the measured fetch-vs-inline comparison.
+  let bytes: BufferSource;
+  if (new URLSearchParams(location.search).get("inline") === "1") {
+    const { WASM_B64 } = await import(`../engine-${name}.b64.js`);
+    bytes = Uint8Array.from(atob(WASM_B64), (c) => c.charCodeAt(0));
+  } else {
+    bytes = await fetch(`engine-${name}.wasm`).then((r) => r.arrayBuffer());
+  }
   const { instance } = await WebAssembly.instantiate(bytes, {});
   wasmExports = instance.exports as unknown as WasmExports;
 }
