@@ -1,0 +1,8 @@
+# Build output — fully regenerable via `make build`.
+output/
+guests/rust_bindgen/pkg/
+guests/assemblyscript/build/
+guests/assemblyscript/node_modules/
+
+# Raw captures — fully regenerable via `make bench`.
+results/

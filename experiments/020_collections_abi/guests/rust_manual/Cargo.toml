@@ -1,0 +1,20 @@
+[package]
+name = "collections_manual"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[features]
+# Default on. Turn OFF to measure what pulling `std`'s hash collections into a
+# guest actually costs in binary size — see the README's size table.
+default = ["hashed"]
+hashed = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

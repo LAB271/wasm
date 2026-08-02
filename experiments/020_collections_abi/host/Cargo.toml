@@ -1,0 +1,15 @@
+[package]
+name = "collections_host"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "collections_host"
+path = "src/main.rs"
+
+[dependencies]
+wasmtime = { version = "47", features = ["component-model"] }
+anyhow = "1"
+
+[profile.release]
+opt-level = 3

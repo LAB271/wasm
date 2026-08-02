@@ -1,0 +1,11 @@
+{
+  "name": "collections-as",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "asc assembly/index.ts --target release"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.28.0"
+  }
+}

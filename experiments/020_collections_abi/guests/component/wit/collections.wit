@@ -1,0 +1,25 @@
+package lab271:collections@0.1.0;
+
+// The Component Model's answer to exactly this problem: aggregates are part of
+// the *interface type system*, not something each toolchain invents. The
+// canonical ABI then specifies precisely how each of these lowers to core WASM
+// i32s, who allocates (the callee, via `cabi_realloc`), and who frees.
+world collections {
+  export str-stats: func(s: string) -> u64;
+  export noop-str: func(s: string) -> u64;
+
+  export list-sum-u32: func(xs: list<u32>) -> u64;
+  export noop-list-u32: func(xs: list<u32>) -> u64;
+
+  // There is no `map` in WIT either — but there is a canonical way to spell one.
+  export map-lookup-sorted: func(entries: list<tuple<string, u32>>, probes: list<string>) -> u64;
+  export noop-map: func(entries: list<tuple<string, u32>>, probes: list<string>) -> u64;
+
+  export set-count-sorted: func(members: list<u32>, probes: list<u32>) -> u64;
+  export set-count-bitset: func(words: list<u64>, probes: list<u32>) -> u64;
+  export noop-set: func(members: list<u32>, probes: list<u32>) -> u64;
+
+  // Returning an aggregate: the canonical ABI makes the *caller* pass a return
+  // area and the callee allocate the buffer with `cabi_realloc`.
+  export str-upper-ascii: func(s: string) -> string;
+}
