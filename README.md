@@ -97,16 +97,37 @@ wasm-tools strip input.wasm -o output.wasm
 
 #### Results by Experiment
 
-| Exp | Target | Before | After Rust | After Tools | Reduction |
-|-----|--------|--------|------------|-------------|-----------|
-| 010 | `unknown-unknown` | 16 KB | 3.1 KB | **950 B** | 94% |
-| 011 | `wasip1` | 89 KB | 61 KB | **53 KB** | 40% |
-| 012 | `unknown-unknown` | varies | — | varies | (matrix) |
-| 013 | `unknown-unknown` | varies | — | 3-5 KB | (matrix) |
-| 014 | `wasip2` | 164 KB | 164 KB | **148 KB** | 10% |
+| Exp | Target | Description | Final Size | Notes |
+|-----|--------|-------------|------------|-------|
+| 010 | `unknown-unknown` | Mastermind scorer (`#![no_std]`) | **950 B** | 94% reduction (16KB→950B) |
+| 011 | `wasip1` | Mastermind CLI (full `std`) | **53 KB** | 40% reduction (89KB→53KB) |
+| 012 | `unknown-unknown` | Stdlib size matrix | 659B–1.1MB | See breakdown below |
+| 013 | `unknown-unknown` | Unicode strategies | 3.4–4.9 KB | See breakdown below |
+| 014 | `wasip2` | Web server (components) | **148 KB** | 10% reduction (164KB→148KB) |
 
-**Key insight:** For trivial functions without `std` (010), optimization is dramatic.
+**Experiment 012 — Stdlib feature impact:**
+
+| Leg | Configuration | Size |
+|-----|---------------|------|
+| leg1 | Baseline (no optimization) | 1.1 MB |
+| leg2 | LTO only | 1.4 KB |
+| leg3 | wasm-opt only | 1.9 KB |
+| leg4 | LTO + wasm-opt | **910 B** |
+| leg5 | Minimal (`#![no_std]`) | **659 B** |
+| leg6 | Full stdlib + all opts | 910 B |
+
+**Experiment 013 — Unicode handling strategies:**
+
+| Leg | Strategy | Size |
+|-----|----------|------|
+| leg1 | Embedded Unicode tables | 4.9 KB |
+| leg2 | Host delegation (JS) | 3.6 KB |
+| leg3 | ASCII only | 3.4 KB |
+| leg4 | ASCII, no imports | 3.4 KB |
+
+**Key insight:** For trivial functions without `std` (010, 012-leg5), optimization is dramatic.
 For real applications with `std` (011, 014), gains are modest but still worthwhile.
+Unicode tables add ~1.5KB; delegating to host saves that space.
 
 #### Other Binaryen Tools
 
