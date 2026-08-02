@@ -28,8 +28,9 @@ postgres-start: ## Start Postgres in Podman
 	@until podman exec postgres015 pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
 	@echo "Postgres ready on :5432"
 
-postgres-stop: ## Stop Postgres container
+postgres-stop: ## Stop and remove Postgres container
 	podman stop postgres015 || true
+	podman rm postgres015 || true
 
 postgres-logs: ## Show Postgres logs
 	podman logs -f postgres015
