@@ -1,4 +1,5 @@
-#![no_std]
+// no_std for WASM builds (smaller binary), but use std for native tests
+#![cfg_attr(target_arch = "wasm32", no_std)]
 
 #[cfg(target_arch = "wasm32")]
 #[panic_handler]
