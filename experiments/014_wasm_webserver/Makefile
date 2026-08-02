@@ -18,9 +18,17 @@ build: build-a build-b ## Build both legs
 
 build-a: ## Build Leg A (TCP server)
 	cd leg_a_tcp && cargo build --release --target wasm32-wasip2
+	@if command -v wasm-tools >/dev/null 2>&1; then \
+		wasm-tools strip leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm \
+			-o leg_a_tcp/target/wasm32-wasip2/release/leg_a_tcp.wasm; \
+	fi
 
 build-b: ## Build Leg B (serverless handler)
 	cd leg_b_serverless && cargo build --release --target wasm32-wasip2
+	@if command -v wasm-tools >/dev/null 2>&1; then \
+		wasm-tools strip leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm \
+			-o leg_b_serverless/target/wasm32-wasip2/release/leg_b_serverless.wasm; \
+	fi
 
 # === Size Analysis ===
 
@@ -41,7 +49,8 @@ size: build ## Show artifact sizes with optimization notes
 	@echo "└──────────────────────────────────────────────────────────────────────────────┘"
 	@echo ""
 	@echo "  ✓ Rust/LLVM: opt-level='z', LTO, strip (in Cargo.toml)"
-	@echo "  ✗ Binaryen: wasm-opt does NOT support WASM components (wasip2) yet"
+	@echo "  ✓ wasm-tools strip: removes custom sections (DWARF, names)"
+	@echo "  ✗ Binaryen wasm-opt: does NOT support WASM components (wasip2) yet"
 	@echo "    See: https://github.com/WebAssembly/binaryen/issues/6728"
 	@echo ""
 	@echo "  For core WASM modules (wasm32-unknown-unknown), wasm-opt -Oz typically"

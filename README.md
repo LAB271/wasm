@@ -33,31 +33,117 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 
 ## Key Learnings
 
-### WASM Binary Size Optimization (Experiment 010)
+### WASM Binary Size Optimization
 
-For browser/edge WASM, binary size directly impacts cold start. Rust defaults to
-~16KB for a trivial function; with proper optimization it drops to ~950 bytes:
+For browser/edge WASM, binary size directly impacts cold start and download time.
+This section consolidates learnings from experiments 010-014.
 
-| Step | Size | Toolchain |
-|------|------|-----------|
-| Rust default (`std`) | 16 KB | Rust/LLVM |
-| `#![no_std]` | 3.1 KB | Rust/LLVM |
-| + `wasm-opt -Oz` | **950 B** | Binaryen |
-| AssemblyScript | **481 B** | Binaryen-native |
+#### The Two Toolchains
 
-**Two-stage optimization:**
-1. **Rust/LLVM** — `#![no_std]`, `opt-level = "z"`, LTO, `panic = "abort"` removes stdlib overhead
-2. **Binaryen** — `wasm-opt -Oz` applies WASM-native dead code elimination, instruction combining
+WASM optimization happens in two stages with different tools:
 
-AssemblyScript compiles directly through Binaryen (no LLVM), explaining its smaller baseline.
-For server-side WASM with `std`, the 16KB overhead amortizes against application code.
+| Stage | Toolchain | What it does | Works on |
+|-------|-----------|--------------|----------|
+| **Compile-time** | Rust/LLVM | LTO, dead code elimination, symbol stripping | All targets |
+| **Post-process** | Binaryen (`wasm-opt`) | WASM-native instruction combining, stack optimization | Core modules only |
 
-**Note:** `wasm-opt` only works with core WASM modules (`wasm32-unknown-unknown`).
-WASM components (`wasm32-wasip2`) are not yet supported by Binaryen — see
-[binaryen#6728](https://github.com/WebAssembly/binaryen/issues/6728). Experiments
-012/013 use core modules (optimized), while 014 uses components (Rust-only optimization).
+**Why both matter:** Rust compiles via LLVM, a general-purpose backend. LLVM targets
+WASM but doesn't understand it deeply. Binaryen is WASM-native — it sees optimization
+opportunities LLVM misses. On trivial functions, Binaryen alone provides 60-70% reduction.
 
-See [experiments/010_mastermind_web/README.md](experiments/010_mastermind_web/README.md) for details.
+#### WASM Targets: Modules vs Components
+
+| Target | Type | `wasm-opt` | Use case |
+|--------|------|------------|----------|
+| `wasm32-unknown-unknown` | Core module | ✓ Full support | Browser, embedded, no WASI |
+| `wasm32-wasip1` | Core module | ✓ With `--enable-bulk-memory` | WASI preview 1 (stdin/stdout) |
+| `wasm32-wasip2` | Component | ✗ Not supported | WASI preview 2 (sockets, HTTP) |
+
+Components are the future of WASM (composable, typed interfaces), but Binaryen doesn't
+support them yet — see [binaryen#6728](https://github.com/WebAssembly/binaryen/issues/6728).
+
+#### Optimization Techniques by Target
+
+**Core modules (`wasm32-unknown-unknown`, `wasm32-wasip1`):**
+
+```toml
+# Cargo.toml
+[profile.release]
+opt-level = "z"    # optimize for size
+lto = true         # link-time optimization
+panic = "abort"    # no unwinding
+strip = true       # strip symbols
+```
+
+```bash
+# Post-process (for wasip1, add --enable-bulk-memory)
+wasm-opt -Oz input.wasm -o output.wasm
+```
+
+**Components (`wasm32-wasip2`):**
+
+```toml
+# Cargo.toml — same Rust-side optimizations
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+```
+
+```bash
+# wasm-tools strip removes custom sections (DWARF, etc.)
+wasm-tools strip input.wasm -o output.wasm
+```
+
+#### Results by Experiment
+
+| Exp | Target | Before | After Rust | After Tools | Reduction |
+|-----|--------|--------|------------|-------------|-----------|
+| 010 | `unknown-unknown` | 16 KB | 3.1 KB | **950 B** | 94% |
+| 011 | `wasip1` | 89 KB | 61 KB | **53 KB** | 40% |
+| 012 | `unknown-unknown` | varies | — | varies | (matrix) |
+| 013 | `unknown-unknown` | varies | — | 3-5 KB | (matrix) |
+| 014 | `wasip2` | 164 KB | 164 KB | **148 KB** | 10% |
+
+**Key insight:** For trivial functions without `std` (010), optimization is dramatic.
+For real applications with `std` (011, 014), gains are modest but still worthwhile.
+
+#### Other Binaryen Tools
+
+| Tool | Purpose | Component support |
+|------|---------|-------------------|
+| `wasm-opt` | Optimize/shrink | ✗ Core modules only |
+| `wasm-merge` | Merge multiple modules | ✗ Core modules only |
+| `wasm-metadce` | Dead code elimination with dependency info | ✗ Core modules only |
+
+#### wasm-tools (Component-aware)
+
+| Tool | Purpose |
+|------|---------|
+| `wasm-tools strip` | Remove custom sections (DWARF, names) |
+| `wasm-tools component new` | Wrap core module as component |
+| `wasm-tools component link` | Link dynamic library modules |
+
+#### When to Use What
+
+| Scenario | Target | Optimization |
+|----------|--------|--------------|
+| Browser app, no WASI | `wasm32-unknown-unknown` | Rust + `wasm-opt -Oz` |
+| CLI tool, stdin/stdout | `wasm32-wasip1` | Rust + `wasm-opt -Oz --enable-bulk-memory` |
+| Server, sockets/HTTP | `wasm32-wasip2` | Rust + `wasm-tools strip` |
+| Edge/serverless (Spin, etc.) | `wasm32-wasip2` | Rust + `wasm-tools strip` |
+
+#### AssemblyScript Note
+
+AssemblyScript compiles directly through Binaryen (no LLVM intermediate), which is
+why it produces smaller binaries for trivial functions (481B vs 950B for the same
+`score_guess` function in experiment 010). For complex applications, the difference
+narrows as actual code dominates overhead.
+
+See individual experiment READMEs for detailed methodology:
+- [010_mastermind_web](experiments/010_mastermind_web/README.md) — browser, core module, `#![no_std]`
+- [011_mastermind_cli_wasi](experiments/011_mastermind_cli_wasi/README.md) — CLI, wasip1, bulk-memory
+- [014_wasm_webserver](experiments/014_wasm_webserver/README.md) — server, wasip2, components
 
 ## Structure
 
