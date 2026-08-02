@@ -124,7 +124,7 @@ identically). The host CLI (4.0.0) is ahead of every published container
 image. Worth flagging as a pattern, not a one-off: containerizing a WASM
 runtime can carry a version-skew cost on top of the cold-start tax above.
 
-### 2b. crun-wasm — podman's own WASM-capable OCI runtime **[PARTIALLY VERIFIED — blocked]**
+### 2b. crun-wasm — the recipe that does *not* work **[SUPERSEDED by §3b]**
 
 A claim worth testing: podman can reportedly select a WASM-capable OCI
 runtime (`crun` built with the wasm feature, "crun-wasm") the same way it
@@ -309,8 +309,12 @@ Reproduce: `make verify-containerd-shim` and `make verify-k3d-spinkube`
 ### 3b. WASM as the workload via podman + `crun` **[VERIFIED]**
 
 A second, much lighter route to the same architecture — no k8s, no separate shim
-install, using only what podman already ships. The podman machine's `crun` is built
-with WASM support:
+install, using only what podman already ships.
+
+`crun` is Linux software and is **never installed on macOS**. It lives inside the
+podman machine VM, already present, and every command below reaches it through
+`podman machine ssh`. There is nothing to `brew install` for this leg. On a Linux
+host, drop the `podman machine ssh --` prefix and the rest is identical.
 
 ```
 $ podman machine ssh -- crun --version | tail -1
