@@ -123,18 +123,36 @@ what else the function needs to do.
 surprise.** AoS→SoA extraction is genuinely the most expensive marshalling step measured
 (3.5–4.3 ms at 2M points, vs ~0.2 ms for a flat float array) — that part matches the
 hypothesis that structured data is the expensive rung. But the *dominant* cost turns out
-to be something else entirely: **`f64::sqrt` is std-only on stable Rust — unavailable in
-`no_std` — for the same reason experiment 017 found `sin`/`cos`/`exp`/`log` need the
-`libm` crate.** We assumed (per 017's own writeup) that sqrt was exempt as a hardware
-op; it isn't, on stable. Software `libm::sqrt` costs **~9-15x more than V8's
-hardware-backed `Math.sqrt`** for this workload — isolated cleanly by also benchmarking
-a sqrt-free variant (`sum_points_sq`, sum-of-squares only): there, WASM's compute alone
-(1.19–1.30 ms) is *faster* than JS's (1.79–1.96 ms), consistent with rungs 1–3. **The
-lesson generalizes beyond this repo: any WASM guest compiled with stable Rust that needs
-transcendentals (including plain `sqrt`) pays a real, measurable software-libm tax that
-a JIT'd host language doesn't.** This is a mechanism finding on top of a marshalling one
-— we did not expect it, and it's arguably the most important single result in this
-experiment.
+to be something else entirely: this benchmark's `sum_points` calls **`libm::sqrt` — a
+software implementation — costing ~9-15x more than V8's hardware-backed `Math.sqrt`**.
+Isolated cleanly with a sqrt-free variant (`sum_points_sq`, sum-of-squares only): there
+WASM's compute alone (1.19–1.30 ms) is *faster* than JS's (1.79–1.96 ms), consistent with
+rungs 1–3. So the rung-5 result is a libm tax, not a marshalling tax.
+
+> **Correction (verified after the fact).** An earlier draft attributed that tax to "the
+> same reason experiment 017 found `sin`/`cos`/`exp`/`log` need `libm`." **That is wrong,
+> and the distinction matters.**
+>
+> WASM *does* have a native `f64.sqrt` instruction (opcode `0x9F`, core MVP — `sqrt` is
+> IEEE-754-required, not a transcendental). Verified two ways: this benchmark's
+> `crossover_oz.wasm` contains **zero** `f64.sqrt` instructions, because the source calls
+> `libm::sqrt` explicitly; and a minimal `std` crate doing `x.sqrt()` on
+> `wasm32-unknown-unknown` compiles to **exactly one** `f64.sqrt` instruction.
+>
+> The real cause is narrower: `f64::sqrt` lives in `std`, not `core`, so a `no_std` crate
+> on stable Rust cannot reach it and pulls in the `libm` crate instead — paying a software
+> routine for something the hardware does in one instruction. **This is an avoidable Rust
+> packaging artifact, not a WASM limitation.** Dropping `no_std` fixes it.
+>
+> 017's finding is the opposite in every respect that matters: WASM genuinely has no
+> `f64.sin` instruction, so bundling libm is **unavoidable**, and it **buys** bit-identical
+> results across engines for a measured 10.2 KB. Same symptom — software libm in the
+> module — opposite lesson. One is a constraint with a benefit; this is a footgun with none.
+
+The generalizable lesson, stated correctly: **before concluding WASM is slow at something,
+check whether the guest is using a software implementation of an operation the instruction
+set already provides.** A `no_std` build can silently swap one hardware instruction for a
+function call, and nothing warns you.
 
 ## Axis 2 — work per crossing (granularity / amortization)
 
