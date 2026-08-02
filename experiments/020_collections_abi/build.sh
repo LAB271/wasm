@@ -78,10 +78,4 @@ echo "Dumping shared workload..."
 ( cd host && ./target/release/collections_host --dump ../output/workload )
 
 echo ""
-echo "Artifacts (raw, and after wasm-opt -Oz):"
-for w in "$OUT"/*.wasm; do
-    wasm-opt -Oz --enable-bulk-memory --enable-reference-types --enable-multivalue \
-        "$w" -o /tmp/020oz.wasm 2>/dev/null \
-        && oz=$(wc -c < /tmp/020oz.wasm | tr -d ' ') || oz="n/a"
-    printf "  %-40s %8d B   -Oz %8s B\n" "$w" "$(wc -c < "$w")" "$oz"
-done
+echo "Build complete."
