@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>019 — WASM debugging harness</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 720px; margin: 2rem auto; }
+  button { margin: 0.25rem; padding: 0.4rem 0.8rem; }
+  pre { background: #111; color: #0f0; padding: 1rem; min-height: 6rem; overflow: auto; }
+  select { padding: 0.3rem; }
+</style>
+</head>
+<body>
+<h1>019 — WASM debugging harness</h1>
+<p>
+  Manual verification page for the Chrome DevTools <strong>C/C++ DevTools Support (DWARF)</strong>
+  extension. See ../README.md "Manual DevTools verification" for exact steps. Load a tier below,
+  open DevTools → Sources, and step through <code>trigger_panic</code> / <code>fibonacci</code> in
+  the original Rust source.
+</p>
+<p>
+  Tier: <select id="tier">
+    <option value="../module/target/wasm32-unknown-unknown/tier1/wasm_debug_demo.wasm">tier1 (fully optimized)</option>
+    <option value="../module/target/wasm32-unknown-unknown/tier2/wasm_debug_demo.wasm">tier2 (optimized + names)</option>
+    <option value="../module/target/wasm32-unknown-unknown/tier3/wasm_debug_demo.wasm">tier3 (release + debug info)</option>
+    <option value="../module/target/wasm32-unknown-unknown/debug/wasm_debug_demo.wasm" selected>tier4 (full debug)</option>
+  </select>
+  <button id="load">Load</button>
+</p>
+<p>
+  <button id="fib">fibonacci(30)</button>
+  <button id="log">log_and_compute(5)</button>
+  <button id="panic">trigger_panic(4) — traps</button>
+</p>
+<pre id="out">(not loaded)</pre>
+<script type="module">
+  const out = document.getElementById("out");
+  const log = (msg) => { out.textContent += msg + "\n"; out.scrollTop = out.scrollHeight; };
+
+  let instance = null;
+
+  async function loadTier() {
+    const path = document.getElementById("tier").value;
+    out.textContent = `loading ${path} ...\n`;
+    const bytes = await (await fetch(path)).arrayBuffer();
+    const imports = {
+      env: {
+        host_log(ptr, len) {
+          const mem = new Uint8Array(instance.exports.memory.buffer, ptr, len);
+          log("[host_log] " + new TextDecoder().decode(mem));
+        },
+      },
+    };
+    ({ instance } = await WebAssembly.instantiate(bytes, imports));
+    log(`loaded. exports: ${Object.keys(instance.exports).join(", ")}`);
+  }
+
+  document.getElementById("load").onclick = () => loadTier().catch((e) => log("ERROR: " + e));
+  document.getElementById("fib").onclick = () => {
+    try { log(`fibonacci(30) = ${instance.exports.fibonacci(30)}`); }
+    catch (e) { log("TRAP: " + e.stack); }
+  };
+  document.getElementById("log").onclick = () => {
+    try { log(`log_and_compute(5) = ${instance.exports.log_and_compute(5)}`); }
+    catch (e) { log("TRAP: " + e.stack); }
+  };
+  document.getElementById("panic").onclick = () => {
+    try { log(`trigger_panic(4) = ${instance.exports.trigger_panic(4)}`); }
+    catch (e) { log("TRAP (expected): " + e.stack); }
+  };
+
+  loadTier().catch((e) => log("ERROR: " + e));
+</script>
+</body>
+</html>

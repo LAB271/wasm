@@ -1,0 +1,70 @@
+[package]
+name = "wasm-debug-demo"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["hostlog"]
+nostd = []
+# `env.host_log` import + the `log_and_compute` export. On by default; build
+# with --no-default-features to get a zero-import module (needed for
+# `wasmtime run --profile=guest`, whose CLI can't satisfy custom imports).
+hostlog = []
+
+# Tier 1: "Fully optimized" — 010's exact recipe (no_std, opt-level=z, lto,
+# panic=abort, strip=true). Requires --features nostd.
+[profile.tier1]
+inherits = "release"
+opt-level = "z"
+lto = true
+panic = "abort"
+strip = true
+debug = false
+
+# Tier 2: "Optimized + names" — identical to tier1 except strip="debuginfo"
+# (not `false`!). A bare `strip = false` also disables cargo's post-link
+# strip of whatever DWARF LTO happened to pull in from the precompiled core/
+# compiler_builtins sysroot rlibs (measured: balloons to ~580KB for this
+# crate — see README "surprises" section) — `strip = "debuginfo"` removes
+# DWARF but keeps the wasm name section, which is what "names preserved"
+# actually means here. wasm-opt is invoked with -g in build.sh to keep the
+# name section through the post-processing pass too. Requires --features
+# nostd.
+[profile.tier2]
+inherits = "release"
+opt-level = "z"
+lto = true
+panic = "abort"
+strip = "debuginfo"
+debug = false
+
+# Tier 3: "Release + debug info" — standard release codegen (opt-level=3, no
+# lto, panic=unwind, no strip) plus debug=true for DWARF. std (no nostd
+# feature), no wasm-opt post-processing.
+[profile.tier3]
+inherits = "release"
+opt-level = 3
+lto = false
+panic = "unwind"
+strip = false
+debug = true
+
+# Tier 4 ("Full debug") uses the built-in `dev` profile as-is (opt-level=0,
+# debug=true, panic=unwind, no strip) — no custom profile needed.
+
+# Not a size tier — separate output directories for the zero-import
+# (--no-default-features) builds used only by scripts/profile_guest.sh, so
+# they never overwrite tier1/tier2's own build artifacts. `profiling` = tier1
+# flags (no names); `profiling-names` = tier2 flags (name section kept).
+[profile.profiling]
+inherits = "tier1"
+
+[profile.profiling-names]
+inherits = "tier2"
+
+[profile.profiling-dwarf]
+inherits = "tier3"
+

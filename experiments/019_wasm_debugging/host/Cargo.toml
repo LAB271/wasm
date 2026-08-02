@@ -1,0 +1,15 @@
+[package]
+name = "wasm-debug-host"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "wasm-debug-host"
+path = "src/main.rs"
+
+[dependencies]
+wasmtime = { version = "36", features = ["cranelift"] }
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
