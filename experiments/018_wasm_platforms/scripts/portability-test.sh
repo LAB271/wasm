@@ -26,6 +26,25 @@ echo ""
 
 record() { RESULTS+=("$1: $2"); echo ""; echo ">>> $1: $2"; echo ""; }
 
+# Pull the real diagnostic out of a runtime's log.
+#
+# Every one of these CLIs buries the actual reason among ANSI colour codes, ISO
+# timestamps, banner boxes, and trailing "file a bug" boilerplate. Two traps:
+# the reason is the FIRST error, not the last (a naive `tail` picks up shutdown
+# noise like ERR_IPC_CHANNEL_CLOSED or "a newer version is available"), and the
+# generic wrapper lines say nothing ("error during execution process (see
+# 'command output' above)"). Strip the noise, keep the first line that carries
+# an actual cause.
+diagnose() {
+    sed -E $'s/\x1b\\[[0-9;]*m//g' "$1" \
+      | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z[[:space:]]*//' \
+      | grep -aiE 'error|not found|unsupported|cannot|unable' \
+      | grep -avE "see 'command output'|newer version of|create an issue|file an issue|Logs were written|Runtime stderr|ERR_IPC_CHANNEL_CLOSED|runtime failed to start|json-logger" \
+      | sed -E 's/^[[:space:]]*[^[:alnum:]`"]*//; s/^\[?ERROR\]?:?[[:space:]]*//I' \
+      | grep -avE '^[[:space:]]*$' \
+      | head -1 | cut -c1-220
+}
+
 # 1. wasmtime serve — the raw component-model runtime, no platform wrapper.
 echo "--- 1/5 wasmtime serve (no wrapper at all) ---"
 (timeout 5 wasmtime serve -S cli "$WASM" --addr 127.0.0.1:19001 &>/tmp/wasm018-wasmtime.log &)
@@ -96,7 +115,7 @@ sleep 6
 if curl -sS -f http://127.0.0.1:19003/ &>/tmp/wasm018-fastly-curl.log; then
     record "Fastly/Viceroy" "PASS — $(cat /tmp/wasm018-fastly-curl.log)"
 else
-    record "Fastly/Viceroy" "FAIL (expected) — $(grep -E 'ERROR|WARN' /tmp/wasm018-fastly.log | tail -3 | tr '\n' ' ')"
+    record "Fastly/Viceroy" "FAIL (expected) — $(diagnose /tmp/wasm018-fastly.log)"
 fi
 pkill -f "fastly compute serve" 2>/dev/null || true
 sleep 1
@@ -124,7 +143,7 @@ sleep 8
 if curl -sS -f http://127.0.0.1:19004/ &>/tmp/wasm018-wrangler-curl.log; then
     record "Cloudflare Workers" "PASS — $(cat /tmp/wasm018-wrangler-curl.log)"
 else
-    record "Cloudflare Workers" "FAIL (expected) — $(grep -i 'error' /tmp/wasm018-wrangler.log | tail -2 | tr '\n' ' ')"
+    record "Cloudflare Workers" "FAIL (expected) — $(diagnose /tmp/wasm018-wrangler.log)"
 fi
 pkill -f "wrangler dev" 2>/dev/null || true
 
