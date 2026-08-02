@@ -157,31 +157,30 @@ separate `crun-wasm` binary exists at `/usr/bin/crun-wasm`. An OCI-Wasm image
 was built earlier this session (`localhost/hello-crun-wasm:latest`, 43.9 KB —
 confirmed via `podman images`), so image construction works.
 
-**Blocked at the invocation step.** Selecting that runtime failed two
-different ways:
+**Runtime *selection* initially looked like a blocker, and the reason is
+instructive.** Chasing the widely-repeated recipe — register `crun-wasm` under
+`[engine.runtimes]` in `containers.conf`, then select it — dead-ends here:
 
 ```
 $ podman run --rm --runtime=/usr/bin/crun-wasm localhost/hello-crun-wasm:latest
 Error: unknown flag: --runtime
 ```
 
-This podman client (6.0.1) does not expose a `--runtime` flag on `podman run`
-at all (confirmed: `podman run --help` has no `--runtime` entry, only
-`--cpu-rt-runtime`). Runtime selection here is `containers.conf`-only, not a
-CLI override — and locating/writing that file inside the VM
-(`/etc/containers/containers.conf` doesn't exist; the actual path wasn't
-found before time ran out) is the next concrete step, **not completed**.
+This podman client exposes no `--runtime` flag on `podman run` (only
+`--cpu-rt-runtime`), and there is no `[engine.runtimes]` block — or even a
+`/etc/containers/containers.conf` — in the VM at all.
 
-A minimal pod spec for the `podman play kube` path is written
-(`crun-wasm/pod-wasm.yaml`, `runtimeClassName: crun-wasm`) but **not run** —
-it would block at the identical unresolved step (`crun-wasm` isn't registered
-under `[engine.runtimes]` yet).
+**That recipe is simply the wrong mechanism.** No runtime registration and no
+runtime selection are required, because the *default* `crun` is already built
+`+WASM:wasmedge`. Dispatch happens on the
+`module.wasm.image/variant=compat-smart` **annotation**, not on runtime choice.
+Both `podman run` and `podman play kube` were subsequently run successfully on
+this machine, with cold-start measurements and a three-way test isolating the
+annotation as the true mechanism.
 
-**Not verified, explicitly**: `containers.conf` registration, `podman run`
-actually executing a `.wasm` via `crun-wasm`, and the `podman play kube` +
-`runtimeClassName` path that would mirror the k8s RuntimeClass pattern. This
-is a real, promising lead — not a dead end — but stops here as "blocked at
-runtime selection," not "doesn't work."
+**See [§3b below](#3b-wasm-as-the-workload-via-podman--crun-verified) for the
+verified result.** The lead was real; the published instructions for following
+it are wrong.
 
 ### 3. WASM as the workload via a containerd shim — the interesting one **[VERIFIED]**
 
@@ -581,8 +580,8 @@ above, not built here.
 └── crun-wasm/                        # 2b leg — blocked at runtime selection, see README
     ├── Containerfile                 # FROM scratch, COPY hello.wasm, ENTRYPOINT — no Linux userspace
     ├── hello/                        # minimal WASI command (Rust, wasm32-wasip1)
-    └── pod-wasm.yaml                 # runtimeClassName: crun-wasm — written, not yet run
-                                       # (podman play kube blocked on the same step as podman run)
+    └── pod-wasm.yaml                 # podman play kube — verified running (§3b);
+                                       # runtimeClassName is ignored, the annotation dispatches
 ```
 
 ## Prerequisites
