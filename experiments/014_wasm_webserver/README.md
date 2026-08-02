@@ -29,8 +29,6 @@ This experiment builds incrementally:
 2. **Phase 2:** ✅ Embedded SQLite via rusqlite (Leg A only)
 3. **Phase 3:** ✅ Full CRUD operations (GET/POST/PUT/DELETE)
 4. **Phase 4:** ⬚ Spin key-value store (Leg B persistence)
-5. **Phase 5:** ⬚ External Postgres via Podman (host bridge pattern)
-6. **Phase 6:** ⬚ FFI experiment — AssemblyScript calling Rust host functions
 
 ### Phase 4: Spin Key-Value Store
 
@@ -47,34 +45,10 @@ let data = store.get("key")?;
 
 **Hypothesis:** Simple, zero-config persistence with ~1ms overhead per operation.
 
-### Phase 5: External Postgres
+### Related Experiments
 
-Connect WASM to a real database running in Podman. Tests the "host bridge"
-pattern where the WASM module calls out to host-provided database functions.
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│ WASM Module │────▶│ Host Bridge │────▶│  Postgres   │
-│ (Spin/wt)   │     │  (pg wire)  │     │  (Podman)   │
-└─────────────┘     └─────────────┘     └─────────────┘
-```
-
-**Hypothesis:** Network hop adds 1-5ms latency; worth it for real ACID guarantees.
-
-### Phase 6: FFI — AssemblyScript + Rust Host
-
-Explore the FFI boundary by writing a WASM module in AssemblyScript that calls
-external functions implemented in Rust on the host side.
-
-```
-┌─────────────────────┐     ┌─────────────────────┐
-│  AssemblyScript     │────▶│  Rust Host Runtime  │
-│  (business logic)   │ FFI │  (crypto, I/O, etc) │
-└─────────────────────┘     └─────────────────────┘
-```
-
-**Hypothesis:** FFI overhead is negligible (<1μs per call); useful for providing
-capabilities that WASM can't do natively (crypto, filesystem, network).
+- **015:** External Postgres via Podman — host bridge pattern, real ACID
+- **016:** FFI — AssemblyScript calling Rust host functions
 
 ---
 
