@@ -20,7 +20,10 @@
 #     --build-arg WASM_DST=app.wasm .
 #   podman run --rm -p 5034:3000 hello-py-spin
 
-FROM ghcr.io/fermyon/spin:latest
+# NOTE: `:latest` no longer resolves — ghcr.io/fermyon/spin has no `latest` tag
+# (checked via the GHCR tags API 2026-08-02; newest published tag is v3.1.2,
+# arm64 manifest confirmed present). Pinned to avoid the "manifest unknown" 404.
+FROM ghcr.io/fermyon/spin:v3.1.2
 
 ARG APP_DIR=js-spin
 ARG WASM_SRC=target/hello-js.wasm
