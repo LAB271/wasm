@@ -29,9 +29,9 @@ Given a collection and a situation, use this. Every row is backed by a measured 
 | **A homogeneous numeric list** | ptr+len over linear memory, any toolchain | Marshalling is 1.5–7% of total. The bytes already are the representation; the strategy barely matters. |
 | **Strings, wasmtime host, hot path** | Rust manual ptr+len (UTF-8) | 197 µs vs 322 (AssemblyScript), 796 (Component Model), 1,498 (`externref`) for the same 2,000 strings. |
 | **Strings, JS host** | AssemblyScript, or accept `TextEncoder` | AS's UTF-16 matches JS's; Rust+wasm-bindgen spends **92% of its string time** in the encode. |
-| **A map queried once** | Sorted k/v pairs + binary search | No build cost. `map_sorted` beats nothing else but needs no allocation and no `HashMap` in the binary (−13.7 KB). |
+| **A map queried once** | Sorted k/v pairs + binary search | Slower per query than a guest-side hash map (217 vs 80 µs), but it has no build cost, allocates nothing, and keeps `HashMap`/`HashSet` out of the binary (−13,677 B). |
 | **A map queried many times** | Build guest-side once, keep an integer handle | 63 µs vs 217 µs re-serialising per call — 3.4x, and the gap grows with query count. |
-| **A collection you cannot or will not copy** | `externref`, host-side | **Zero bytes copied**, but never fastest here. Closest on maps: 225 µs, 6th of 9 and within 4% of hand-rolled binary search, because the guest touches 4,000 of 1,000 entries and nothing else. |
+| **A collection you cannot or will not copy** | `externref`, host-side | **Zero bytes copied**, but never fastest here. Closest on maps: 225 µs, 6th of 9 and within 4% of hand-rolled binary search, because 4,000 lookups reach only a handful of the map's 1,000 entries. |
 | **Anything the guest iterates element-by-element** | **Not `externref`** | 5.3–78x slower than copying. One host call per element, at 20–48 ns each. |
 | **A public interface you don't own both sides of** | Component Model / WIT | 13 declarative lines of glue vs 61–83 hand-written. Costs ~330 ns per call. Pay it at coarse granularity. |
 
@@ -43,7 +43,7 @@ element-wise, and (c) the *representation you chose* for sets — and only rarel
 
 | # | Hypothesis | Verdict from measured data |
 |---|---|---|
-| H1 | Bytes copied is the dominant marshalling cost | **Refuted.** Copying 400 KB into linear memory costs 5.6–28 µs — 1.4–6% of the total. Per-*call* and per-*element* costs dominate everywhere. |
+| H1 | Bytes copied is the dominant marshalling cost | **Refuted.** Copying 400 KB into linear memory costs 5.6–28 µs — 1.5–7% of the total. Per-*call* and per-*element* costs dominate everywhere. |
 | H2 | AssemblyScript's UTF-16 strings cost ~2x the bytes of Rust's UTF-8 | **Partly.** 1.393x on a mixed corpus (70% ASCII scalars), not 2x — 4-byte UTF-8 scalars are 4 bytes in UTF-16 too. Marshal time 1.9x. |
 | H3 | The Component Model's canonical ABI is competitive with hand-rolled ptr+len | **Refuted on per-call cost, confirmed on per-byte cost.** 330 ns/call vs 11 ns (30x), but its *bulk copy* is the fastest measured (8.5 µs for 400 KB). |
 | H4 | `externref` avoids marshalling and is therefore cheaper | **Refuted.** Zero bytes copied and never fastest: 3.6x (maps), 5.3x (lists), 7.6x (strings), 77.6x (sets) slower than the best copying strategy. It closes the gap only in proportion to how few elements the guest touches. |
@@ -187,12 +187,18 @@ pairs. Marshal time is 1.9x (97.2 vs 51.5 µs), worse than the byte ratio, becau
 has to transcode rather than `memcpy`.
 
 **AssemblyScript's advantage is invisible in this table, and that is the point.** Our host is
-wasmtime holding UTF-8, so AS pays a transcode Rust doesn't. The Rust↔JS half of the inversion *is* measured here: the wasm-bindgen row isolates it, and
+wasmtime holding UTF-8, so AS pays a transcode Rust doesn't. Change the host to JS and the
+sign flips.
+
+The Rust↔JS half of that flip *is* measured here: the wasm-bindgen row isolates it, and
 **448.8 of its 487.5 µs — 92% — is the encode**, with the FNV loop over the same 47,947
 scalars costing only 38.6 µs. The AS↔JS half is **inferred, not measured** — this experiment
 is server-side only and has no AssemblyScript-under-Node leg — but it follows directly: JS
-strings are UTF-16, AS strings are UTF-16, so the transcode that dominates the wasm-bindgen
-row has nothing to do. Neither encoding is better; they are bets on who your host is.
+strings are UTF-16 and AS strings are UTF-16, so the transcode that dominates the
+wasm-bindgen row has nothing to do.
+
+Neither encoding is better. They are bets on who your host is, and the bet costs about 2x
+the marshalling time when you lose it.
 
 ### AssemblyScript's object layout, verified by running it
 
@@ -266,8 +272,8 @@ agreed: the lift for `str-upper-ascii` carries a `post-return`, which the disass
 | Leg | bytes copied | marshal µs | compute µs | total µs | marshal share |
 |---|---:|---:|---:|---:|---:|
 | Component Model | 400,000 | **8.5** | 407.0 | 415.5 | 2.0% |
-| Hand-written WAT | 400,000 | 21.7 | 408.3 | 403.4 | ~5% |
-| AssemblyScript | 400,000 | 28.0 | 442.1 | 398.1 | ~7% |
+| Hand-written WAT | 400,000 | 21.7 | 408.3 | 403.4 | 5.4% |
+| AssemblyScript | 400,000 | 28.0 | 442.1 | 398.1 | 7.0% |
 | Rust manual | 400,000 | 25.5 | 415.8 | 458.2 | 5.6% |
 | `externref` | **0** | 21.8 | 2,024.5 | **2,108.2** | — |
 | wasm-bindgen — *Node, not comparable* | 400,000 | 5.6 | 377.8 | 383.4 | 1.5% |
@@ -339,8 +345,8 @@ of encoder in the host, 25 lines of WAT accessors in the guest. No allocation, n
 them is the whole story:
 
 - *Rebuild per call* (80 µs): pays a full `HashMap` construction for one batch of probes,
-  and still beats binary search 2.7x because hashing 16-byte keys is cheaper than 12 string
-  comparisons each.
+  and still beats binary search 2.7x because hashing a 16-byte key once is cheaper than the
+  ~10 string comparisons a binary search over 1,000 keys needs.
 - *Build once, keep an integer handle* (**63 µs, the fastest cell**): the guest becomes
   stateful; the host gets back a `u32` it stores and passes to `map_query`. This is an
   `externref` in disguise, with the guest as the owner instead of the host. 3.4x better than
@@ -373,8 +379,12 @@ nothing per key. AssemblyScript's `Map<string, u32>` cannot: an AS `string` is U
 every one of the 1,000 keys and 4,000 probes must be **transcoded from the host's UTF-8 and
 heap-allocated** before it can be hashed. Byte-wise binary search skips all of that and never
 constructs a single AS string, which is why the *lower-level* option wins in the
-*higher-level* language. This is the mirror image of AssemblyScript's UTF-16 advantage in the
-strings section: same property, opposite sign, because the host changed.
+*higher-level* language — and why AS's byte-wise binary search (166.6 µs) also beats Rust's
+`str`-comparing one (216.8 µs).
+
+This is the same UTF-16 property as the strings section, surfacing a second time and in the
+same direction: with a UTF-8 host, every AssemblyScript API that wants a real `string` is a
+transcode. Under a JS host the sign flips for both.
 
 `Vec<String>` in wasm-bindgen is worse still, and not for the reason we assumed. Verified in
 the generated `pkg/collections_bindgen.js`: `passArrayJsValueToWasm0` puts each JS string into
@@ -438,7 +448,7 @@ sets, and any domain you don't know in advance. Then it is the map story minus v
 + binary search if you query once, guest-side `HashSet` behind a handle if you query often.
 
 **`externref` is the wrong tool for a set**, by 78x. 65,536 probes means 65,536 host calls at
-48 ns each; the entire bitset alternative runs in the time 700 of those calls take.
+48 ns each; the entire bitset alternative finishes in the time ~850 of those calls take.
 
 ---
 
@@ -458,9 +468,12 @@ number of host callbacks the guest makes.
 
 The module has **no linear memory at all** (`guests/wat/externref.wat`, 810 B, 549 B after
 `-Oz`). Zero bytes are copied, ever. And it still loses badly whenever the guest iterates,
-because you have traded one linear copy for a linear number of *crossings*, and a crossing is
-2–5x more expensive than a scalar import: each `externref` callback must resolve the GC handle
-(`Rooted::data`) and downcast the host object before it can do any work.
+because you have traded one linear copy for a linear number of *crossings* — and an
+`externref` crossing is not a cheap one. At 20–48 ns it is roughly 4–10x the ~5 ns scalar host
+import [016](../016_ffi_assemblyscript/) measured (on wasmtime 36, so treat that as an
+order-of-magnitude comparison, not a controlled one). The difference is that every callback
+must resolve the GC handle (`Rooted::data`) and downcast the host object before it can do any
+work.
 
 The rule that falls out: **`externref` costs you in proportion to how much of the collection
 the guest touches, and it never bought back the copy in any cell measured here.** A map lookup
@@ -534,8 +547,8 @@ nothing in WebAssembly knows what your bytes mean.
 
 **Measured, high confidence** — every table above; parity across 34 cells; the 30x component
 call overhead and its falsification test with a `list<u32>` argument; the 1.393x UTF-16 byte
-ratio; the 13,677 B `HashMap`/`HashSet` delta; the 16x bitset advantage reproduced in five
-independent toolchains; the forward/reverse ordering check.
+ratio; the 13,677 B `HashMap`/`HashSet` delta; the 6.5–16.5x bitset advantage reproduced in all six
+legs; the forward/reverse ordering check.
 
 **Verified by disassembly, not by documentation** — the `canon lift` options for every export
 (`realloc`, `string-encoding=utf8`, `post-return` on the one aggregate-returning function);
@@ -563,9 +576,10 @@ host).
 ## What isn't here
 
 - **No browser leg.** Server-side only, by scope. The wasm-bindgen leg runs under Node.
-- **`map_handle`, `map_hash` and `set_hash` exist only in the Rust and AssemblyScript legs.**
-  Nobody hand-writes a hash table in WAT, and neither WIT nor a stateless canonical-ABI export
-  has a place to keep one. That asymmetry *is* the finding: guest-side state needs a handle
+- **Not every strategy has every cell, and the gaps are findings.** `map_handle` exists only
+  in the Rust leg; `map_hash` and `set_hash` only in Rust and AssemblyScript. Nobody
+  hand-writes a hash table in WAT, and neither a WIT export nor a stateless canonical-ABI
+  function has anywhere to keep one between calls. Guest-side state needs a handle
   convention, and only the linear-memory strategies have one.
 - **No AoS/struct-list leg** — [008](../008_js_vs_wasm_crossover/) measured that directly and
   this experiment cites it rather than re-deriving it.
