@@ -101,7 +101,9 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [015](experiments/015_postgres_bridge/) | postgres_bridge | done | Database access via host imports (no HTTP sidecar) |
 | [016](experiments/016_ffi_assemblyscript/) | ffi_assemblyscript | done | FFI overhead: AssemblyScript calling Rust host |
 | [017](experiments/017_float_determinism/) | float_determinism | done | Cross-engine float determinism: JS `Math.*` vs WASM libm, ULP-level |
-| [018](experiments/018_wasm_platforms/) | wasm_platforms | done | Local-testability matrix across 3 container architectures and 4 platform runtimes; wasi-http portability demonstrated across 5 runtimes |
+| [018](experiments/018_wasm_platforms/) | wasm_platforms | done | Local-testability matrix across 4 container architectures (incl. verified podman+crun WASM-as-workload) and 4 platform runtimes; wasi-http portability demonstrated across 5 runtimes |
+| [019](experiments/019_wasm_debugging/) | wasm_debugging | done | Debuggability vs binary size — DWARF/name-section cost across 4 tiers; the other side of 010 |
+| [020](experiments/020_js_vs_wasm_crossover/) | js_vs_wasm_crossover | done | Where WASM stops paying: data shape (scalars→objects) and work-per-crossing, vs properly-tuned JS |
 
 ### How to read these
 
@@ -110,8 +112,8 @@ different standard, so read the numbers accordingly:
 
 | Kind | Examples | Standard it's held to |
 |------|----------|----------------------|
-| **Benchmark** | 001, 002, 003, 014, 015, 016 | Real numbers, same-session fairness, hypotheses marked from measured data |
-| **Mechanism explainer** | 010, 013 | Show how it works; numbers are illustrative, the tradeoff is the deliverable |
+| **Benchmark** | 001, 002, 003, 014, 015, 016, 020 | Real numbers, same-session fairness, hypotheses marked from measured data |
+| **Mechanism explainer** | 010, 013, 019 | Show how it works; numbers are illustrative, the tradeoff is the deliverable |
 | **Correctness probe** | 005, 011, 017 | Does it behave as specified? Bit-exact where it matters, not perf-focused |
 | **Survey** | 018 | Verified-installable claims only; sources cited; what-I-ran kept separate from what-I-read |
 

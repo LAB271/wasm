@@ -356,26 +356,39 @@ would be dominated by crossing overhead turns out to be **wrong**. The solver's 
 loop (`allGuesses × poss`) issues up to ~1.68M `score_guess` calls per step. Measured
 in Node on that exact call volume:
 
-| Implementation | 1.68M calls | vs WASM |
-|----------------|------------|---------|
-| WASM (Rust, `no_std`) | **24 ms** | — |
-| JS, allocation-free scalar counters | 40 ms | 1.68x slower |
-| JS, naive (4 array allocations per call) | 59 ms | 2.47x slower |
+V8's JS→WASM call overhead for a flat all-integer signature is low enough that it never
+dominates — [020](../020_js_vs_wasm_crossover/) later measured it at **~5.5 ns per
+crossing**. WASM wins on the compute itself, not by avoiding the boundary.
 
-V8's JS→WASM call overhead for a flat all-integer signature is low enough that it
-never dominates; WASM wins on the compute itself, and still wins 1.68x against
-hand-tuned allocation-free JS.
+**Corrected figure.** This section first published a 1.68x WASM advantage, measured
+against a "tuned switch" JS formulation. That formulation was not the fastest available.
+[020](../020_js_vs_wasm_crossover/) re-ran the same 1.68M-call workload across five JS
+formulations, all parity-checked bit-for-bit against the WASM:
 
-So the honest verdict is a real tradeoff, not a rout: **3x the bytes for 1.68x the
+| Implementation | 1.68M calls (median of 7) | vs WASM |
+|----------------|--------------------------|---------|
+| WASM (Rust, `no_std`, `wasm-opt -Oz`) | **15.2 ms** | — |
+| **JS, bit-packed nibbles** | **17.4 ms** | **1.14x slower** |
+| JS, typed-array scratch | 41.7 ms | 2.74x |
+| JS, tuned switch — *the original 1.68x came from here* | 42.3 ms | 2.78x |
+| JS, naive (4 array allocations per call) | 51.5 ms | 3.39x |
+| WASM, `wasm-opt -O3` | 24.2 ms | 1.59x *slower than `-Oz`* |
+
+Packing six 4-bit counters into a single `i32` eliminates the branching that made the
+switch version slow, and **closes the gap to 1.14x**. The earlier number overstated
+WASM's advantage roughly 1.5-fold — not because the measurement was wrong, but because
+the opponent wasn't trying hard enough.
+
+So the honest verdict is narrower than first written: **~3x the bytes for ~1.14x the
 speed.** For manual play — ten calls per game — the WASM is pure overhead and JS is
-the right answer. For the solver, it saves ~16 ms per step, which a user cannot
-perceive; at ten times the problem size, they would. Mastermind sits almost exactly on
-the crossover, which is what makes it a useful thing to measure rather than assume.
+plainly the right answer. Even for the solver, 2 ms per step against well-written JS is
+not a reason to ship a second toolchain. Mastermind sits *below* the crossover, not on
+it, and it took a properly optimised opponent to see that.
 
-The generalisable rule is **amortization**: WASM earns its bytes when the work done
-per byte shipped is high enough to repay the binary's fixed overhead. At 950 bytes of
-integer comparison that repayment is marginal. At experiment 014's 1.1 MB SQLite leg
-it is not remotely in question.
+The generalisable rule is **amortization**: WASM earns its bytes when the work done per
+byte shipped is high enough to repay the binary's fixed overhead. At 950 bytes of
+integer comparison, against JS that has been given equal effort, that repayment does not
+arrive. At experiment 014's 1.1 MB SQLite leg it is not remotely in question.
 
 ### CORS demo
 
