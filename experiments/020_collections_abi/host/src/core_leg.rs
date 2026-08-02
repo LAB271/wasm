@@ -316,7 +316,7 @@ fn map_op(
     let alloc = c.f1("alloc")?;
     let lookup = c.f3i64(export)?;
 
-    let mut marshal_into = |c: &mut Ctx| -> Result<(i32, i32, i32)> {
+    let marshal_into = |c: &mut Ctx| -> Result<(i32, i32, i32)> {
         let kp = alloc.call(&mut c.store, b.keys.len() as i32)?;
         c.write(kp, &b.keys);
         let vp = alloc.call(&mut c.store, b.vals.len() as i32)?;
