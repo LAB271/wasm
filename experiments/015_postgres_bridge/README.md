@@ -104,7 +104,33 @@ cargo install wasmtime-cli
 
 ## Status
 
-⬚ Not started
+✅ Working — CRUD test passes, benchmark complete.
+
+## Results
+
+**Benchmark: 1000 iterations of WASM → Host → Postgres COUNT(*) → WASM**
+
+| Metric | Value |
+|--------|-------|
+| min | 360μs |
+| median | **459μs** |
+| avg | 462μs |
+| p99 | 659μs |
+| max | 1044μs |
+
+**Comparison with 001/leg4c (Node.js sidecar):**
+
+| Approach | Median latency | Processes |
+|----------|---------------|-----------|
+| 015 (Rust host imports) | ~460μs | 1 |
+| 001/leg4c (HTTP sidecar) | ~2ms | 2 |
+
+The ~4x improvement comes from eliminating:
+- HTTP serialization/deserialization
+- TCP loopback overhead
+- Node.js event loop scheduling
+
+**Guest WASM size:** 406 bytes (no_std, wasm-opt)
 
 ## Related
 
