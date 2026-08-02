@@ -49,13 +49,14 @@ colima ssh -- sudo ctr images pull "${IMAGE}"
 
 echo ""
 echo "-- running it with --runtime=io.containerd.wasmtime.v1 (5s sample, then killed) --"
-colima ssh -- bash -c "
+ctr_out=$(colima ssh -- bash -c "
   sudo ctr run --rm --runtime=io.containerd.wasmtime.v1 '${IMAGE}' ${CONTAINER_NAME} &
   CTR_PID=\$!
   sleep 3
   sudo ctr task kill -s SIGKILL ${CONTAINER_NAME} 2>/dev/null || true
   wait \$CTR_PID 2>/dev/null || true
-" | head -8
+") || ctr_out="(ctr run failed)"
+echo "$ctr_out" | head -8
 
 echo ""
 echo "-- contrast: docker's own --platform=wasi/wasm32 flag (Docker Desktop's path) --"

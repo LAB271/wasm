@@ -10,7 +10,7 @@ pass=0; fail=0
 check() {
     local name="$1"; shift
     if "$@" &>/tmp/wasm018-check.log; then
-        echo "  OK   $name: $("$@" 2>&1 | head -1)"
+        echo "  OK   $name: $(head -1 /tmp/wasm018-check.log)"
         pass=$((pass+1))
     else
         echo "  FAIL $name (see /tmp/wasm018-check.log)"
