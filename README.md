@@ -173,7 +173,47 @@ Both are cases of keeping a heavyweight host and swapping only what runs inside 
 **Key insight:** Components are the future (composable, typed interfaces), but Binaryen
 doesn't support them yet — use `wasm-tools strip` instead of `wasm-opt`.
 
-### 3. Host Bridging Patterns
+### 3. Float math: the instruction set is not your stdlib
+
+The single most transferable gotcha found in this repo, because it silently costs both
+size and speed and produces no warning. **WASM's float instruction set tracks IEEE-754's
+own required/recommended split:**
+
+- IEEE-754 §5 **requires** correctly-rounded `add`, `sub`, `mul`, `div`, **`sqrt`**,
+  `remainder`, conversions — WASM has an instruction for each.
+- IEEE-754 §9.2 lists `sin`, `cos`, `exp`, `log`, `pow` as **recommended**, i.e. optional
+  — WASM has none of them.
+
+"Does WASM have an instruction for this?" is nearly the same question as "does IEEE-754
+require it?" Whatever it lacks, your guest must carry as code.
+
+Measured, on `wasm32-unknown-unknown` ([020](experiments/020_js_vs_wasm_crossover/),
+[017](experiments/017_float_determinism/)):
+
+| Situation | Example | Consequence |
+|-----------|---------|-------------|
+| Instruction exists, your stdlib exposes it | `abs`, `min`, `max`, `copysign` | free — one opcode |
+| **Instruction exists, your stdlib hides it** | Rust `no_std`: `sqrt`, `floor`, `ceil`, `trunc` | **9–15x slower**, software routine for a single opcode |
+| Instruction exists, semantics differ | `round` (half-away-from-zero) vs `f64.nearest` (half-to-even) | compiler emits a helper, not the instruction |
+| No instruction exists | `sin`, `cos`, `exp`, `log`, `pow` | must bundle libm: **+10.2 KB**, buys bit-identical results across engines |
+
+Only the last row is a real trade. The second is pure waste — Rust's `core`/`std`
+boundary is a packaging decision that predates its WASM backend and doesn't line up with
+the instruction set, so a `no_std` build strands four instructions that are right there.
+
+**If you generate or hand-write WASM,** map your math surface onto the instruction set
+rather than onto another language's stdlib: lower `sqrt`/`floor`/`ceil`/`trunc`/`abs`/
+`min`/`max`/`copysign` directly, verify semantics before lowering (`round` is the trap),
+and bundle libm only for the genuinely absent set.
+
+**Detect it in any build you already have** — look for the instruction you expect:
+
+```bash
+wasm-tools print module.wasm | grep -c 'f64.sqrt'
+# 0 while calling sqrt => a software routine got linked in
+```
+
+### 4. Host Bridging Patterns
 
 Three ways to extend WASM capabilities:
 
@@ -191,7 +231,7 @@ access, eliminating the HTTP sidecar reduced latency from 2ms to 460μs — 4x i
 - SHA256 (1KB) via host: 764ns (vs ~50μs in pure WASM)
 - Hardware crypto (SHA-NI, AES-NI) makes host-side 50-100x faster
 
-### 4. Binary Size Optimization
+### 5. Binary Size Optimization
 
 For trivial functions, optimization is dramatic (16KB → 950B). For real applications,
 gains are modest but worthwhile.
@@ -229,7 +269,7 @@ is bought with bytes, not free.
 | 014 Leg A (TCP+SQLite) | 1.1MB | 448KB | 61% |
 | 014 Leg B (Spin) | 222KB | 81KB | 64% |
 
-### 5. Language Comparison
+### 6. Language Comparison
 
 | Language | Strength | Weakness | Best for |
 |----------|----------|----------|----------|
@@ -244,7 +284,7 @@ it compiles directly through Binaryen. For complex applications, the difference 
 inherent to WASM-in-a-browser: native Rust/AssemblyScript WASM cut cold start ~2.9x (1.8s→0.6s)
 and memory ~1.6x (602MB→375MB) versus Pyodide for identical CPU-bound work in the same harness.
 
-### 6. WASI Capabilities
+### 7. WASI Capabilities
 
 | Feature | wasip1 | wasip2 |
 |---------|--------|--------|
@@ -264,7 +304,7 @@ Fastly's Viceroy could not run it as-is — Workers because workerd/V8 only pars
 modules (not the Component Model's binary format at all), Viceroy because its Component
 Model support is explicitly experimental. Portability is real but not universal yet.
 
-### 7. Database Access
+### 8. Database Access
 
 | Approach | Latency | Size impact | When to use |
 |----------|---------|-------------|-------------|

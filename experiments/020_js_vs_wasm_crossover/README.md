@@ -129,30 +129,82 @@ Isolated cleanly with a sqrt-free variant (`sum_points_sq`, sum-of-squares only)
 WASM's compute alone (1.19–1.30 ms) is *faster* than JS's (1.79–1.96 ms), consistent with
 rungs 1–3. So the rung-5 result is a libm tax, not a marshalling tax.
 
-> **Correction (verified after the fact).** An earlier draft attributed that tax to "the
-> same reason experiment 017 found `sin`/`cos`/`exp`/`log` need `libm`." **That is wrong,
-> and the distinction matters.**
->
-> WASM *does* have a native `f64.sqrt` instruction (opcode `0x9F`, core MVP — `sqrt` is
-> IEEE-754-required, not a transcendental). Verified two ways: this benchmark's
-> `crossover_oz.wasm` contains **zero** `f64.sqrt` instructions, because the source calls
-> `libm::sqrt` explicitly; and a minimal `std` crate doing `x.sqrt()` on
-> `wasm32-unknown-unknown` compiles to **exactly one** `f64.sqrt` instruction.
->
-> The real cause is narrower: `f64::sqrt` lives in `std`, not `core`, so a `no_std` crate
-> on stable Rust cannot reach it and pulls in the `libm` crate instead — paying a software
-> routine for something the hardware does in one instruction. **This is an avoidable Rust
-> packaging artifact, not a WASM limitation.** Dropping `no_std` fixes it.
->
-> 017's finding is the opposite in every respect that matters: WASM genuinely has no
-> `f64.sin` instruction, so bundling libm is **unavoidable**, and it **buys** bit-identical
-> results across engines for a measured 10.2 KB. Same symptom — software libm in the
-> module — opposite lesson. One is a constraint with a benefit; this is a footgun with none.
+> **Correction:** an earlier draft blamed this on "the same reason 017 found `sin`/`cos`
+> need `libm`." That is wrong — WASM *has* `f64.sqrt`, and the real cause is a Rust
+> `core`/`std` boundary that does not line up with the instruction set. Full analysis in
+> [The `no_std` math trap](#the-no_std-math-trap) below.
 
 The generalizable lesson, stated correctly: **before concluding WASM is slow at something,
 check whether the guest is using a software implementation of an operation the instruction
 set already provides.** A `no_std` build can silently swap one hardware instruction for a
 function call, and nothing warns you.
+
+## The `no_std` math trap
+
+Measured on rustc 1.96.0, `wasm32-unknown-unknown`. Every cell below was compiled and
+disassembled, not read from documentation.
+
+| Rust method | Reachable from `no_std`? | WASM instruction exists? | What `std` actually emits |
+|-------------|--------------------------|--------------------------|---------------------------|
+| `abs` | **yes** (`core`) | `f64.abs` | native instruction |
+| `min` / `max` / `copysign` | **yes** (`core`) | `f64.min`/`max`/`copysign` | native instruction |
+| `sqrt` | **no** — std-only | **yes**, `f64.sqrt` (`0x9F`) | native instruction |
+| `floor` | **no** — std-only | **yes**, `f64.floor` | native instruction |
+| `ceil` | **no** — std-only | **yes**, `f64.ceil` | native instruction |
+| `trunc` | **no** — std-only | **yes**, `f64.trunc` | native instruction |
+| `round` | **no** — std-only | `f64.nearest` exists, **wrong semantics** | software helper |
+| `sin` `cos` `exp` `ln` `powf` | **no** — std-only | **no instruction** | software `libm` |
+
+Three genuinely different situations hide behind "std-only":
+
+**1. Stranded — hardware exists, `no_std` can't reach it.** `sqrt`, `floor`, `ceil`,
+`trunc`. The instruction is right there; `core` just doesn't expose the method, so a
+`no_std` crate reaches for `libm` and pays a software routine for a single opcode. This
+is what cost rung 5 **9–15x**. Pure waste, and no warning is emitted.
+
+**2. Semantic mismatch.** `round` is the interesting one: `f64.nearest` exists, but it
+rounds half-to-even while Rust's `round` is half-away-from-zero. They are different
+functions, so even *with* `std` the compiler emits a helper rather than the instruction —
+the disassembly shows no `f64.nearest` and one extra function in the module.
+
+**3. Honest absence.** `sin`, `cos`, `exp`, `ln`, `powf` have no WASM instruction at all.
+Shipping `libm` is unavoidable, costs ~10.2 KB ([017](../017_float_determinism/)), and
+buys bit-identical results across every engine. A real trade, unlike case 1.
+
+### Why the line falls where it does
+
+The WASM instruction set tracks **IEEE-754's own required/recommended split**, not
+anyone's idea of "basic math":
+
+- IEEE-754 §5 **requires** correctly-rounded `add`, `sub`, `mul`, `div`, **`sqrt`**,
+  `remainder`, and conversions. WASM provides all of these as instructions.
+- IEEE-754 §9.2 lists `sin`, `cos`, `exp`, `log`, `pow` and friends as **recommended**,
+  i.e. optional. WASM provides none of them.
+
+So "does WASM have an instruction for this?" is very nearly the question "does IEEE-754
+require it?" `sqrt` is required — which is exactly why it has an opcode and `sin` doesn't.
+Calling `sqrt` a transcendental (as the first draft of this README did) gets the
+prediction backwards.
+
+### Implication for any language targeting WASM
+
+Rust's `core`/`std` boundary is a Rust packaging decision that predates its WASM backend
+and does not line up with the instruction set. Any language emitting WASM should map its
+own math surface onto the **instruction set**, not onto Rust's precedent:
+
+- Lower `sqrt`, `floor`, `ceil`, `trunc`, `abs`, `min`, `max`, `copysign` straight to
+  instructions — no runtime dependency, no size cost.
+- Check semantics before lowering. `round` looks like `f64.nearest` and isn't.
+- Ship `libm` only for the genuinely-absent set, and know it costs ~10 KB.
+
+**How to detect it in a build you already have:** disassemble and look for the
+instruction you expect.
+
+```
+$ wasm-tools print module.wasm | grep -c 'f64.sqrt'
+0          # calling sqrt but zero sqrt instructions -> a software routine is in there
+```
+
 
 ## Axis 2 — work per crossing (granularity / amortization)
 
