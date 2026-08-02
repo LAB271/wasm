@@ -16,155 +16,150 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 
 | # | Name | Status | What it tests |
 |---|------|--------|---------------|
-| [001](experiments/001_hello_world/) | hello_world | results pending | Flask/Docker vs Pyodide/Chromium vs Wasmtime — cold start, memory, throughput |
-| [002](experiments/002_chromium_sandbox/) | chromium_sandbox | done | Chromium+Pyodide isolation strategies — worker pools, BrowserContext pooling, JS↔WASM bridge overhead |
-| [003](experiments/003_wasm_compile/) | wasm_compile | results pending | Compiling JS/Python/Rust to `.wasm` via Spin/componentize-py/cargo, native vs. podman |
-| [004](experiments/004_static_wasi_hello/) | static_wasi_hello | done | Static HTML page, zero server at execution time — `mvl-lang/mvl-playground`'s actual architecture |
-| [005](experiments/005_stdout_capture_load/) | stdout_capture_load | done | stdout/stderr capture correctness + overhead at 10/1,000/100,000 lines |
-| [006](experiments/006_worker_kill_switch/) | worker_kill_switch | done | `Worker.terminate()` against a genuine infinite loop — is it actually instant? (No — ~2.1s) |
-| [007](experiments/007_custom_runtime_vs_interpreter/) | custom_runtime_vs_interpreter | done | Hand-written 78-line JS runtime shim vs. componentize-py vs. Pyodide — artifact size, cold start, build complexity |
-| [008](experiments/008_mvl_example_wasm_harness/) | mvl_example_wasm_harness | done | Standalone (non-browser) host for `mvl build --backend=wasm` output — found and fixed 3 real memory/tag bugs in the ported runtime, one of which was mislabeled as a compiler bug (mvl-lang/mvl#2083, corrected and closed) |
-| [009](experiments/009_rust_native_host/) | rust_native_host | done | Native Rust host embedding `wasmtime` directly, no HTTP — checks a Medium article's "200µs" claim against true cold start and against its own methodology |
-| [010](experiments/010_mastermind_web/) | mastermind_web | done | Mastermind scored entirely by a compiled `.wasm` module, click-driven UI — reverse-engineered the struct-return ABI, worked around a dead-code-elimination bug dropping string data for unreached `pub` functions |
-| [011](experiments/011_mastermind_cli_wasi/) | mastermind_cli_wasi | done | Same game, pure Rust, `wasm32-wasip1`, real WASI `fd_read` stdin — proves genuine interactive I/O works under WASM/WASI, isolating that MVL's `--backend=wasm` gap is backend-specific, not a WASM/WASI limitation |
-| [012](experiments/012_stdlib_size_matrix/) | stdlib_size_matrix | done | Measure artifact size across stdlib feature combinations |
-| [013](experiments/013_unicode_strategies/) | unicode_strategies | done | Compare Unicode handling strategies for WASM string runtime |
-| [014](experiments/014_wasm_webserver/) | wasm_webserver | in progress | TCP vs serverless web server: guest-owned sockets (wasi:sockets) vs host-owned (Spin wasi:http) |
+| [001](experiments/001_hello_world/) | hello_world | done | Flask/Docker vs Pyodide/Chromium vs Wasmtime — cold start, memory, throughput |
+| [002](experiments/002_chromium_sandbox/) | chromium_sandbox | done | Chromium+Pyodide isolation — worker pools, BrowserContext pooling |
+| [003](experiments/003_wasm_compile/) | wasm_compile | done | Compiling JS/Python/Rust to `.wasm` via Spin/componentize-py/cargo |
+| [004](experiments/004_static_wasi_hello/) | static_wasi_hello | done | Static HTML page, zero server at execution time |
+| [005](experiments/005_stdout_capture_load/) | stdout_capture_load | done | stdout/stderr capture correctness at scale |
+| [006](experiments/006_worker_kill_switch/) | worker_kill_switch | done | `Worker.terminate()` latency against infinite loops |
+| [007](experiments/007_custom_runtime_vs_interpreter/) | custom_runtime_vs_interpreter | done | Custom JS runtime vs componentize-py vs Pyodide |
+| [008](experiments/008_mvl_example_wasm_harness/) | mvl_example_wasm_harness | done | Standalone WASM host for MVL compiler output |
+| [009](experiments/009_rust_native_host/) | rust_native_host | done | Native Rust host embedding wasmtime directly |
+| [010](experiments/010_mastermind_web/) | mastermind_web | done | Browser WASM: Rust + AssemblyScript engines |
+| [011](experiments/011_mastermind_cli_wasi/) | mastermind_cli_wasi | done | CLI WASM with real WASI stdin/stdout |
+| [012](experiments/012_stdlib_size_matrix/) | stdlib_size_matrix | done | Stdlib feature impact on binary size |
+| [013](experiments/013_unicode_strategies/) | unicode_strategies | done | Unicode handling: embed vs delegate to host |
+| [014](experiments/014_wasm_webserver/) | wasm_webserver | done | TCP vs serverless: guest-owned vs host-owned sockets |
+| [015](experiments/015_postgres_bridge/) | postgres_bridge | done | Database access via host imports (no HTTP sidecar) |
+| [016](experiments/016_ffi_assemblyscript/) | ffi_assemblyscript | done | FFI overhead: AssemblyScript calling Rust host |
+
+---
 
 ## Key Learnings
 
-### WASM Binary Size Optimization
+### 1. Deployment Architectures
 
-For browser/edge WASM, binary size directly impacts cold start and download time.
-This section consolidates learnings from experiments 010-014.
+**Client-side (browser)**
+- WASM runs in browser via `WebAssembly.instantiate()` — no server round-trips after initial load
+- Ideal for compute-heavy UI (games, codecs, crypto) where latency matters
+- Example: [010](experiments/010_mastermind_web/) — Mastermind scoring in 950-byte WASM
 
-#### The Two Toolchains
+**Server-side (wasmtime)**
+- Embed wasmtime as a library — single process, no container overhead
+- Cold start: ~40ms (vs 500ms+ for containers)
+- Example: [009](experiments/009_rust_native_host/) — native Rust host
 
-WASM optimization happens in two stages with different tools:
+**Serverless (Spin/Cloudflare Workers)**
+- Host owns the socket, guest only handles requests
+- Fastest cold start: host pre-warms the listener
+- Example: [014](experiments/014_wasm_webserver/) — Spin vs raw TCP
 
-| Stage | Toolchain | What it does | Works on |
-|-------|-----------|--------------|----------|
-| **Compile-time** | Rust/LLVM | LTO, dead code elimination, symbol stripping | All targets |
-| **Post-process** | Binaryen (`wasm-opt`) | WASM-native instruction combining, stack optimization | Core modules only |
+| Architecture | Cold Start | Memory | When to use |
+|--------------|------------|--------|-------------|
+| Browser | 0 (cached) | 20MB | Interactive UI, offline-capable |
+| wasmtime embed | ~40ms | ~20MB | Latency-sensitive, single-tenant |
+| Serverless (Spin) | ~5ms | ~10MB | HTTP workloads, multi-tenant |
+| Container | 500ms+ | 50MB+ | Legacy, complex dependencies |
 
-**Why both matter:** Rust compiles via LLVM, a general-purpose backend. LLVM targets
-WASM but doesn't understand it deeply. Binaryen is WASM-native — it sees optimization
-opportunities LLVM misses. On trivial functions, Binaryen alone provides 60-70% reduction.
+### 2. WASM Targets
 
-#### WASM Targets: Modules vs Components
+| Target | Type | Use case | Size optimization |
+|--------|------|----------|-------------------|
+| `wasm32-unknown-unknown` | Core module | Browser, no WASI | `wasm-opt -Oz` (60-70% reduction) |
+| `wasm32-wasip1` | Core module | CLI, stdin/stdout | `wasm-opt -Oz --enable-bulk-memory` |
+| `wasm32-wasip2` | Component | Sockets, HTTP, serverless | `wasm-tools strip` (~10% reduction) |
 
-| Target | Type | `wasm-opt` | Use case |
-|--------|------|------------|----------|
-| `wasm32-unknown-unknown` | Core module | ✓ Full support | Browser, embedded, no WASI |
-| `wasm32-wasip1` | Core module | ✓ With `--enable-bulk-memory` | WASI preview 1 (stdin/stdout) |
-| `wasm32-wasip2` | Component | ✗ Not supported | WASI preview 2 (sockets, HTTP) |
+**Key insight:** Components are the future (composable, typed interfaces), but Binaryen
+doesn't support them yet — use `wasm-tools strip` instead of `wasm-opt`.
 
-Components are the future of WASM (composable, typed interfaces), but Binaryen doesn't
-support them yet — see [binaryen#6728](https://github.com/WebAssembly/binaryen/issues/6728).
+### 3. Host Bridging Patterns
 
-#### Optimization Techniques by Target
+Three ways to extend WASM capabilities:
 
-**Core modules (`wasm32-unknown-unknown`, `wasm32-wasip1`):**
+| Pattern | Latency | Complexity | Use case |
+|---------|---------|------------|----------|
+| **Host imports** | ~5ns/call | Moderate | Crypto, compression, DB |
+| **HTTP sidecar** | ~2ms/call | Simple | Polyglot, legacy |
+| **Embedded in host** | 0 | High | Tight integration |
 
+**Experiment 015** showed host imports are essentially free (5ns overhead). For database
+access, eliminating the HTTP sidecar reduced latency from 2ms to 460μs — 4x improvement.
+
+**Experiment 016** demonstrated FFI overhead is negligible:
+- Pure FFI call: 5ns
+- SHA256 (1KB) via host: 764ns (vs ~50μs in pure WASM)
+- Hardware crypto (SHA-NI, AES-NI) makes host-side 50-100x faster
+
+### 4. Binary Size Optimization
+
+For trivial functions, optimization is dramatic (16KB → 950B). For real applications,
+gains are modest but worthwhile.
+
+**Rust-side (all targets):**
 ```toml
-# Cargo.toml
 [profile.release]
-opt-level = "z"    # optimize for size
+opt-level = "z"    # size
 lto = true         # link-time optimization
 panic = "abort"    # no unwinding
-strip = true       # strip symbols
+strip = true       # symbols
 ```
 
+**Post-process:**
 ```bash
-# Post-process (for wasip1, add --enable-bulk-memory)
+# Core modules
 wasm-opt -Oz input.wasm -o output.wasm
-```
 
-**Components (`wasm32-wasip2`):**
-
-```toml
-# Cargo.toml — same Rust-side optimizations
-[profile.release]
-opt-level = "z"
-lto = true
-strip = true
-```
-
-```bash
-# wasm-tools strip removes custom sections (DWARF, etc.)
+# Components (wasip2)
 wasm-tools strip input.wasm -o output.wasm
 ```
 
-#### Results by Experiment
+**HTTP compression:** WASM compresses extremely well (60-70% with brotli).
+Pre-compress and serve with `Content-Encoding: br`.
 
-| Exp | Target | Description | Final Size | Notes |
-|-----|--------|-------------|------------|-------|
-| 010 | `unknown-unknown` | Mastermind scorer (`#![no_std]`) | **950 B** | 94% reduction (16KB→950B) |
-| 011 | `wasip1` | Mastermind CLI (full `std`) | **53 KB** | 40% reduction (89KB→53KB) |
-| 012 | `unknown-unknown` | Stdlib size matrix | 659B–1.1MB | See breakdown below |
-| 013 | `unknown-unknown` | Unicode strategies | 3.4–4.9 KB | See breakdown below |
-| 014 | `wasip2` | Web server (components) | **148 KB** | 10% reduction (164KB→148KB) |
+| Experiment | Raw | Brotli | Savings |
+|------------|-----|--------|---------|
+| 010 Rust engine | 950B | 634B | 33% |
+| 010 AS engine | 481B | 268B | 44% |
+| 014 Leg A (TCP+SQLite) | 1.1MB | 448KB | 61% |
+| 014 Leg B (Spin) | 222KB | 81KB | 64% |
 
-**Experiment 012 — Stdlib feature impact:**
+### 5. Language Comparison
 
-| Leg | Configuration | Size |
-|-----|---------------|------|
-| leg1 | Baseline (no optimization) | 1.1 MB |
-| leg2 | LTO only | 1.4 KB |
-| leg3 | wasm-opt only | 1.9 KB |
-| leg4 | LTO + wasm-opt | **910 B** |
-| leg5 | Minimal (`#![no_std]`) | **659 B** |
-| leg6 | Full stdlib + all opts | 910 B |
+| Language | Strength | Weakness | Best for |
+|----------|----------|----------|----------|
+| **Rust** | Full control, `no_std`, fast | Verbose, compile time | Performance-critical |
+| **AssemblyScript** | Tiny binaries, WASM-native | Limited stdlib | Simple compute |
+| **Python (Pyodide)** | Ecosystem, rapid dev | 5s+ cold start, 300MB+ | Prototyping only |
 
-**Experiment 013 — Unicode handling strategies:**
+AssemblyScript produces smaller binaries for trivial functions (481B vs 950B) because
+it compiles directly through Binaryen. For complex applications, the difference narrows.
 
-| Leg | Strategy | Size |
-|-----|----------|------|
-| leg1 | Embedded Unicode tables | 4.9 KB |
-| leg2 | Host delegation (JS) | 3.6 KB |
-| leg3 | ASCII only | 3.4 KB |
-| leg4 | ASCII, no imports | 3.4 KB |
+### 6. WASI Capabilities
 
-**Key insight:** For trivial functions without `std` (010, 012-leg5), optimization is dramatic.
-For real applications with `std` (011, 014), gains are modest but still worthwhile.
-Unicode tables add ~1.5KB; delegating to host saves that space.
+| Feature | wasip1 | wasip2 |
+|---------|--------|--------|
+| stdin/stdout | ✓ | ✓ |
+| Filesystem | ✓ | ✓ |
+| Environment vars | ✓ | ✓ |
+| Sockets | ✗ | ✓ |
+| HTTP | ✗ | ✓ |
+| Clocks | ✓ | ✓ |
 
-#### Other Binaryen Tools
+**Experiment 011** proved genuine interactive I/O works under wasip1. The gap in MVL's
+WASM backend is implementation-specific, not a WASI limitation.
 
-| Tool | Purpose | Component support |
-|------|---------|-------------------|
-| `wasm-opt` | Optimize/shrink | ✗ Core modules only |
-| `wasm-merge` | Merge multiple modules | ✗ Core modules only |
-| `wasm-metadce` | Dead code elimination with dependency info | ✗ Core modules only |
+### 7. Database Access
 
-#### wasm-tools (Component-aware)
+| Approach | Latency | Size impact | When to use |
+|----------|---------|-------------|-------------|
+| Embedded SQLite | ~1ms | +1MB | Single-tenant, ACID needed |
+| Host bridge (Postgres) | ~460μs | ~400B guest | External DB, connection pooling |
+| Spin KV store | ~1ms | 0 | Serverless, simple K/V |
 
-| Tool | Purpose |
-|------|---------|
-| `wasm-tools strip` | Remove custom sections (DWARF, names) |
-| `wasm-tools component new` | Wrap core module as component |
-| `wasm-tools component link` | Link dynamic library modules |
+**Experiment 014** showed embedded SQLite works in WASM (requires WASI SDK for C compilation).
+**Experiment 015** showed host imports beat HTTP sidecars by 4x for database access.
 
-#### When to Use What
-
-| Scenario | Target | Optimization |
-|----------|--------|--------------|
-| Browser app, no WASI | `wasm32-unknown-unknown` | Rust + `wasm-opt -Oz` |
-| CLI tool, stdin/stdout | `wasm32-wasip1` | Rust + `wasm-opt -Oz --enable-bulk-memory` |
-| Server, sockets/HTTP | `wasm32-wasip2` | Rust + `wasm-tools strip` |
-| Edge/serverless (Spin, etc.) | `wasm32-wasip2` | Rust + `wasm-tools strip` |
-
-#### AssemblyScript Note
-
-AssemblyScript compiles directly through Binaryen (no LLVM intermediate), which is
-why it produces smaller binaries for trivial functions (481B vs 950B for the same
-`score_guess` function in experiment 010). For complex applications, the difference
-narrows as actual code dominates overhead.
-
-See individual experiment READMEs for detailed methodology:
-- [010_mastermind_web](experiments/010_mastermind_web/README.md) — browser, core module, `#![no_std]`
-- [011_mastermind_cli_wasi](experiments/011_mastermind_cli_wasi/README.md) — CLI, wasip1, bulk-memory
-- [014_wasm_webserver](experiments/014_wasm_webserver/README.md) — server, wasip2, components
+---
 
 ## Structure
 
@@ -172,56 +167,25 @@ See individual experiment READMEs for detailed methodology:
 experiments/
 └── NNN_name/        # Self-contained experiment
     ├── README.md    # Hypotheses, methodology, results
-    ├── benchmark.sh # Reproducible benchmark runner
-    └── leg*/        # One directory per runtime under test
+    ├── Makefile     # build, test, benchmark, size targets
+    └── leg*/        # One directory per variant under test
 install.sh           # Check and install prerequisites
 ```
 
 ## Prerequisites
 
-Run `./install.sh` to verify your environment. It checks all required tools and
-auto-installs the Rust WASM target if `rustup` is present.
+Run `./install.sh` to verify your environment.
 
 | Tool | Purpose | Install |
 |------|---------|---------|
-| **podman** _(preferred)_ or docker | Container runtime for Leg 1 | `brew install podman` |
-| **wasmtime** | Native WASM runtime for Leg 3 | `brew install wasmtime` |
-| **rustup** + wasm32-wasip2 | Compile Rust to WASM component | `brew install rustup && rustup-init` |
-| **node** / npm | Puppeteer harness for Leg 2 | `brew install node` |
-| **hey** | Warm benchmark (1000 req) | `brew install hey` |
-
-### Container runtime note
-
-Experiments use **Podman** (rootless, daemonless) by default. Docker works as a
-drop-in if Podman is not available — `install.sh` detects whichever is running and
-sets `CONTAINER_CMD` accordingly. Leg 1's `run.sh` respects this variable.
-
-To start Podman on macOS:
-
-```bash
-brew install podman
-podman machine init
-podman machine start
-```
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Security
-
-Please report vulnerabilities privately, not as a GitHub issue. See
-[SECURITY.md](SECURITY.md).
+| **podman** or docker | Container runtime | `brew install podman` |
+| **wasmtime** | WASM runtime | `brew install wasmtime` |
+| **rustup** + targets | Compile Rust to WASM | `rustup target add wasm32-wasip2` |
+| **wasm-opt** | Binary optimizer | `brew install binaryen` |
+| **wasm-tools** | Component tools | `cargo install wasm-tools` |
+| **node** / npm | JS tooling | `brew install node` |
+| **hey** | HTTP benchmark | `brew install hey` |
 
 ## License
 
-Copyright 2026 Schuberg Philis B.V.
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use
-these files except in compliance with the License. You may obtain a copy of the
-License in [LICENSE](LICENSE) or at <https://www.apache.org/licenses/LICENSE-2.0>.
-
-Unless required by applicable law or agreed to in writing, software distributed
-under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
-language governing permissions and limitations under the License.
+Copyright 2026 Schuberg Philis B.V. — Apache License 2.0. See [LICENSE](LICENSE).
