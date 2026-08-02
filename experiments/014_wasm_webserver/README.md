@@ -25,9 +25,22 @@ Leg A (TCP) will be:
 
 This experiment builds incrementally:
 
-1. **Phase 1 (this PR):** Read-only, CSV → in-memory Vec, JSON responses
-2. **Phase 2:** Replace Vec with rusqlite (embedded SQLite)
-3. **Phase 3:** Add write operations (POST/PUT/DELETE)
+1. **Phase 1:** ✅ Read-only, CSV → in-memory HashMap, JSON responses
+2. **Phase 2:** ⏸️ Deferred — SQLite crates for WASM/WASI are still maturing for wasip2
+3. **Phase 3:** ✅ Full CRUD operations (GET/POST/PUT/DELETE)
+
+### Phase 2 Status (SQLite)
+
+Attempted integrations:
+- `rusqlite` with `bundled` feature — requires WASI SDK for C compilation
+- `rusqlite` with `ffi-sqlite-wasm-rs` — targets `wasm32-unknown-unknown`, not wasip2
+- `sqlite-wasm-wasi` — API incompatibilities with wasip2 target
+
+The HashMap-based approach works well for this experiment. For production WASM
+workloads needing persistence, consider:
+- Spin's built-in key-value store (`spin_sdk::key_value`)
+- External database via HTTP (Turso, PlanetScale)
+- Wait for better WASI SQLite support
 
 ## Structure
 
@@ -79,9 +92,15 @@ id,name,email,department
 ```
 
 API:
-- `GET /records` → `[{"id":1,"name":"Alice",...}, ...]`
-- `GET /records/1` → `{"id":1,"name":"Alice",...}`
 - `GET /health` → `{"status":"ok"}`
+- `GET /records` → `[{"id":1,"name":"Alice",...}, ...]`
+- `GET /records/:id` → `{"id":1,"name":"Alice",...}`
+- `POST /records` → Create new record (body: `{"name":"...","email":"...","department":"..."}`)
+- `PUT /records/:id` → Update existing record
+- `DELETE /records/:id` → Delete record (returns 204 No Content)
+
+Note: In Leg B (serverless), writes don't persist between requests unless
+you use Spin's key-value store or an external database.
 
 ## Results
 
