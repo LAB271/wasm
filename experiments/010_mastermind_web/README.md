@@ -314,6 +314,69 @@ fixed per-request overhead that Chrome's Resource Timing API adds to every
   header — the two problems inlining sidesteps are the two things this
   experiment's `serve.py` now does properly (see the CORS section below).
 
+### Compressing *before* base64, and why it usually doesn't help
+
+Obvious next idea: compress the `.wasm` first, then base64 the compressed bytes,
+and decompress at runtime. Measured on `engine-rust.wasm` (950 B):
+
+| Pipeline | Wire bytes |
+|----------|-----------|
+| `brotli(wasm)` — plain fetch | **634** |
+| `brotli(b64(brotli(wasm)))` | 665 |
+| `brotli(b64(gzip(wasm)))` | 683 |
+| `brotli(b64(wasm))` — inline as built here | 806 |
+
+It genuinely saves ~141 B: the outer brotli still recovers base64's 6-bits-per-byte
+packing even though the payload beneath is incompressible. But you now need a
+decompressor at run time. `DecompressionStream` is native and free, though reliably
+only for gzip/deflate (brotli support there is newer and patchier), so realistically
+you land on the 683 row — and the `DecompressionStream` → `ArrayBuffer` →
+`WebAssembly.instantiate` plumbing costs roughly 150 compressed bytes of glue. 683 +
+150 ≈ 833, which is where you started.
+
+The reason is structural: **you are reimplementing `Content-Encoding` in userspace**,
+and the server already does it natively for zero bytes of JS.
+
+The exception is the case that motivates inlining in the first place — `file://`, a
+mobile webview, no control over headers. There *is* no server compression to lean on,
+so the comparison becomes 1268 B (raw base64, nothing compressing it) versus 848 B
+(base64 of brotli'd wasm, self-decompressed): a **33% saving**, and now the glue is
+worth paying for. The technique is redundant exactly when you don't need inlining, and
+worthwhile exactly when you do.
+
+### Was WASM even worth it here?
+
+Worth asking plainly, since this experiment exists to make the tradeoff legible rather
+than to sell WASM. `score_guess` is ~20 lines of integer comparison. Hand-written
+JavaScript would be roughly 200 B brotli'd, against 634 B for the fetched `.wasm` and
+806 B inlined. **On size, JS wins outright — roughly 3x.**
+
+On speed, the intuition that a trivial function called across the JS↔WASM boundary
+would be dominated by crossing overhead turns out to be **wrong**. The solver's inner
+loop (`allGuesses × poss`) issues up to ~1.68M `score_guess` calls per step. Measured
+in Node on that exact call volume:
+
+| Implementation | 1.68M calls | vs WASM |
+|----------------|------------|---------|
+| WASM (Rust, `no_std`) | **24 ms** | — |
+| JS, allocation-free scalar counters | 40 ms | 1.68x slower |
+| JS, naive (4 array allocations per call) | 59 ms | 2.47x slower |
+
+V8's JS→WASM call overhead for a flat all-integer signature is low enough that it
+never dominates; WASM wins on the compute itself, and still wins 1.68x against
+hand-tuned allocation-free JS.
+
+So the honest verdict is a real tradeoff, not a rout: **3x the bytes for 1.68x the
+speed.** For manual play — ten calls per game — the WASM is pure overhead and JS is
+the right answer. For the solver, it saves ~16 ms per step, which a user cannot
+perceive; at ten times the problem size, they would. Mastermind sits almost exactly on
+the crossover, which is what makes it a useful thing to measure rather than assume.
+
+The generalisable rule is **amortization**: WASM earns its bytes when the work done
+per byte shipped is high enough to repay the binary's fixed overhead. At 950 bytes of
+integer comparison that repayment is marginal. At experiment 014's 1.1 MB SQLite leg
+it is not remotely in question.
+
 ### CORS demo
 
 `serve.py` sends `Access-Control-Allow-Origin: *` (+ `Methods`/`Headers`) on

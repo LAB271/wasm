@@ -6,9 +6,29 @@ real numbers, and documents what held up and what didn't.
 
 ## Why
 
-The premise: WASM runtimes can replace Docker containers for serverless-style workloads —
-smaller artifacts, faster cold starts, lower memory. These experiments validate (or refute)
-that claim with reproducible benchmarks on real hardware.
+> "If WASM+WASI existed in 2008, we wouldn't have needed to created [sic] Docker. That's how
+> important it is. Webassembly on the server is the future of computing. A standardized system
+> interface was the missing link. Let's hope WASI is up to the task!"
+>
+> — Solomon Hykes, co-founder of Docker, [27 March 2019](https://twitter.com/solomonstre/status/1111004913222324225)
+
+That quote launched a thousand "Docker is dead" posts. It is also almost always cited without
+Hykes' own clarification, posted the same day:
+
+> "'So will wasm replace Docker?' No, but imagine a future where Docker runs linux containers,
+> windows containers and wasm containers side by side. Over time wasm might become the most
+> popular container type. Docker will love them all equally, and run it all :)"
+>
+> — [Solomon Hykes, same thread](https://twitter.com/solomonstre/status/1111113329647325185)
+
+Coexistence, not replacement — and that second prediction has aged better than the first.
+[003](experiments/003_wasm_compile/) already runs a WASM runtime inside a container, and
+`containerd` WASM shims make "wasm container type" a literal, shipping reality.
+
+The premise these experiments test: WASM runtimes can replace Docker containers for
+serverless-style workloads — smaller artifacts, faster cold starts, lower memory. Each
+experiment validates (or refutes) part of that claim with reproducible benchmarks on real
+hardware.
 
 Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-stealth-container-killer-we-replaced-docker-with-a-browser-and-slashed-costs-by-60-43fceea80b15)
 
@@ -33,6 +53,21 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [015](experiments/015_postgres_bridge/) | postgres_bridge | done | Database access via host imports (no HTTP sidecar) |
 | [016](experiments/016_ffi_assemblyscript/) | ffi_assemblyscript | done | FFI overhead: AssemblyScript calling Rust host |
 | [017](experiments/017_float_determinism/) | float_determinism | done | Cross-engine float determinism: JS `Math.*` vs WASM libm, ULP-level |
+
+### How to read these
+
+Not every experiment is a rigorous benchmark, and that's deliberate. Each kind is held to a
+different standard, so read the numbers accordingly:
+
+| Kind | Examples | Standard it's held to |
+|------|----------|----------------------|
+| **Benchmark** | 001, 002, 003, 014, 015, 016 | Real numbers, same-session fairness, hypotheses marked from measured data |
+| **Mechanism explainer** | 010, 013 | Show how it works; numbers are illustrative, the tradeoff is the deliverable |
+| **Correctness probe** | 005, 011, 017 | Does it behave as specified? Bit-exact where it matters, not perf-focused |
+| **Survey** | 018 | Verified-installable claims only; sources cited; what-I-ran kept separate from what-I-read |
+
+A number from a mechanism explainer is there to make a tradeoff legible, not to be cited as a
+performance result. A benchmark's numbers are meant to be argued with.
 
 ---
 
