@@ -28,7 +28,6 @@
 | 005 | stdout_capture_load | [0002](0002-archetype-browser-worker-wasi-shim.md) |
 | 006 | worker_kill_switch | [0002](0002-archetype-browser-worker-wasi-shim.md) |
 | 007 | custom_runtime_vs_interpreter | `custom_runtime` leg: [0003](0003-archetype-custom-hand-rolled-abi.md). `componentize-py` leg: [0004](0004-archetype-prebuilt-server-http-blackbox.md) (failed — version skew, reported honestly). Pyodide leg: [0006](0006-archetype-interpreter-in-wasm.md) |
-| 008 | mvl_example_wasm_harness | [0003](0003-archetype-custom-hand-rolled-abi.md) — hybrid with real WASI stdio |
 | 009 | rust_native_host | [0005](0005-archetype-embedded-runtime-library.md) — zero-import variant |
 | 010 | mastermind_web | [0003](0003-archetype-custom-hand-rolled-abi.md) — pure library variant |
 | 011 | mastermind_cli_wasi | [0005](0005-archetype-embedded-runtime-library.md) — full WASI command variant |
@@ -70,7 +69,7 @@ that boundary correctly, and that someone varies by archetype:
 
 **Why this matters: we found real bugs at this boundary.**
 
-Experiment 008 tested a custom ABI (archetype 0003) and discovered three
+Testing a custom ABI (archetype 0003) surfaced three
 memory-safety bugs in the hand-written JavaScript↔WASM marshalling code:
 
 1. **Handle vs pointer confusion**: The JS runtime returned handle-table indices

@@ -33,7 +33,7 @@ because the numbers differ by two orders of magnitude:
 
 | | What hosts the module | Cold start | Experiments |
 |---|---|---|---|
-| **a. Embedded / CLI** | Your own process embeds wasmtime as a library; WASM is a sandboxed plugin | ~40 ms | [008](experiments/008_mvl_example_wasm_harness/), [009](experiments/009_rust_native_host/), [011](experiments/011_mastermind_cli_wasi/), [015](experiments/015_postgres_bridge/), [016](experiments/016_ffi_assemblyscript/) |
+| **a. Embedded / CLI** | Your own process embeds wasmtime as a library; WASM is a sandboxed plugin | ~40 ms | [009](experiments/009_rust_native_host/), [011](experiments/011_mastermind_cli_wasi/), [015](experiments/015_postgres_bridge/), [016](experiments/016_ffi_assemblyscript/) |
 | **b. WASM runtime inside a container** | An OCI container runs Spin/wasmtime, which runs your module | **1,238 ms** | [003](experiments/003_wasm_compile/) legs 1b/2c |
 | **c. WASM *as* the workload** | A serverless host or a containerd/crun shim runs the module directly — no Linux userspace | ~5 ms | [014](experiments/014_wasm_webserver/), [018](experiments/018_wasm_platforms/) |
 

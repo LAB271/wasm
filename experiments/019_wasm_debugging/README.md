@@ -127,7 +127,3 @@ brief's explicit stretch-goal carve-out. Untested, future work.
 ├── web/index.html        # manual DevTools verification harness (see above)
 └── output/               # tier*.wasm + profiling_*.wasm build artifacts (committed, like 012's)
 ```
-
-## Suggested root README row
-
-| [019](experiments/019_wasm_debugging/) | wasm_debugging | done | Debuggability vs. binary size — DWARF/name-section cost across 4 tiers, 010's other side |

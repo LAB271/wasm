@@ -2,7 +2,6 @@
 
 > Exemplified by: [experiment 007](../../experiments/007_custom_runtime_vs_interpreter/)'s
 > `custom_runtime` leg (minimal, 3-function version),
-> [008](../../experiments/008_mvl_example_wasm_harness/) and
 > [010](../../experiments/010_mastermind_web/) (MVL's real ~60-function version).
 
 ## System Context
@@ -12,7 +11,7 @@ namespace** — a `WebAssembly.instantiate(bytes, { runtime: {...} })` call wher
 `runtime` is not a standard world, just whatever functions a hand-written JS
 module chooses to implement. Portable to *any* JS host — this is the one
 archetype in the repo proven to work identically in a browser (010) and in a bare
-Node.js process (007, 008), because there's no WASI-shaped assumption (no Worker
+Node.js process (007), because there's no WASI-shaped assumption (no Worker
 requirement, no `file://` restriction) baked into it at all.
 
 ```mermaid
@@ -34,16 +33,12 @@ flowchart TB
 
 | Container | Path | Role |
 |-----------|------|------|
-| Guest module | 007: Rust → `wasm32-unknown-unknown`. 008/010: MVL source → `mvl build --backend=wasm` | Zero WASI imports. All non-trivial operations (even string concatenation) are calls into the custom namespace. |
-| Hand-written runtime | 007: 37 lines of JS. 008/010: a byte-faithful port of the MVL playground's own runtime module | This file **is** the ABI. There is no spec, no validator, no third party implementing this namespace anywhere else — it is exactly as correct as whoever wrote it made it. |
+| Guest module | 007: Rust → `wasm32-unknown-unknown`. 010: MVL source → `mvl build --backend=wasm` | Zero WASI imports. All non-trivial operations (even string concatenation) are calls into the custom namespace. |
+| Hand-written runtime | 007: 37 lines of JS. 010: a byte-faithful port of the MVL playground's own runtime module | This file **is** the ABI. There is no spec, no validator, no third party implementing this namespace anywhere else — it is exactly as correct as whoever wrote it made it. |
 | Caller | 007: a Node script calling one exported function. 010: a UI click handler calling `score_guess()`/`color_name()` on demand, with no single "run" entry point at all | Decides when and how the guest's exports get invoked — this archetype has no equivalent of `_start`; a "library" module (010) may never run anything end-to-end, only answer individual function calls. |
 
-## Two real shapes inside this one archetype
+## The shape this takes
 
-- **Command-style, hybrid** (008): the compiled module still has a `_start` and
-  still needs *real* WASI for stdio (`wasi_snapshot_preview1.fd_write`) — the
-  custom namespace only replaces data-structure operations, not I/O. Two import
-  namespaces satisfied at once.
 - **Pure library-style** (010): no `_start`, no I/O of any kind, no WASI import at
   all. The module is a portable, sandboxed collection of pure functions the host
   calls whenever it wants. Simplest and most decoupled of anything in this repo.
@@ -53,7 +48,7 @@ flowchart TB
 | | Import surface | Artifact | Cold start | Hand-written host code |
 |---|---|---|---|---|
 | 007 (minimal) | 3 functions (`string_new`/`string_concat`/`string_write`) | **302 bytes** | **0.28ms** | 78 lines total (41 Rust + 37 JS) |
-| 008/010 (MVL's real convention) | ~60 functions (string/array/option/result/map/struct ops) | varies by program | not benchmarked | `mvl-runtime.js`, ~340 lines |
+| 010 (MVL's real convention) | ~60 functions (string/array/option/result/map/struct ops) | varies by program | not benchmarked | `mvl-runtime.js`, ~340 lines |
 
 007's minimal leg exists specifically to show the floor of this archetype: how
 small can a "compile a program to WASM and run it" story get if you refuse both
@@ -75,9 +70,8 @@ literal]` loop. A handle used as a raw memory address corrupts real module memor
 (an upstream compiler issue, "actor message routing crash") before being traced back to
 this exact ABI boundary and corrected. There is no framework here to catch this
 class of error — the entire memory-safety contract between guest and host is
-whatever the hand-written `runtime.js` happens to get right. See
-`experiments/008_mvl_example_wasm_harness/README.md` for the full writeup; this is
-the archetype's central trade-off, not a footnote.
+whatever the hand-written `runtime.js` happens to get right. This is the
+archetype's central trade-off, not a footnote.
 
 Also confirmed in exp010: **string-literal data can silently disappear.**
 `mvl build --backend=wasm`'s dead-code elimination drops `(data ...)` segments for
