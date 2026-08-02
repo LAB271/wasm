@@ -44,6 +44,7 @@ churn if you rerun these scripts.
 | H7 | The same component runs unmodified on Cloudflare Workers (workerd) | **Refuted**, and more fundamentally than H6 — V8 can't even parse the Component Model's binary format; Workers only understands core Wasm modules |
 | H8 | AKS's WASI node pool preview is still available today | **Refuted** — retired, replaced by a SpinKube-on-AKS path |
 | H9 | AWS has no first-class native WASM compute platform | **Confirmed** (by absence — see Cloud provider landscape) |
+| H10 | podman can select a WASM-capable OCI runtime (crun-wasm) the same way it selects runc | **Partially confirmed, blocked** — the VM's crun is genuinely `+WASM:wasmedge` and `crun-wasm` exists, but this podman client (6.0.1) has no `--runtime` flag on `run`; `containers.conf`-based registration not completed |
 
 ---
 
@@ -74,7 +75,14 @@ completely ordinary Linux container whose one process happens to be a WASM
 runtime (Spin, which embeds wasmtime). 003's own README already notes this
 uses `Containerfile` and **not** Docker's `--platform wasi/wasm` shim, because
 podman doesn't support that flag (see architecture 3 below for why that flag
-is Docker-Desktop-specific in the first place, not podman-specific).
+is Docker-Desktop-specific in the first place, not podman-specific). **We
+re-tested this directly** (`podman run --rm --platform=wasi/wasm32
+localhost/hello-crun-wasm:latest`): it does not work here either, but not with
+Docker's clean "does not provide the specified platform" message — podman
+instead tries to pull `localhost/hello-crun-wasm:latest` from a **registry**
+(`pinging container registry localhost: ... connection refused`), ignoring
+the already-present local image entirely. Different failure mode, same
+practical conclusion: 003's claim holds up under a fresh, independent test.
 
 We did **not** rebuild 003 (out of scope, and three other agents are working
 elsewhere in this repo) but did smoke-test its mechanism directly, read-only,
@@ -98,6 +106,77 @@ Wasm modules..." — that's Spin's own startup message, proving podman → Spin
 particular `app.wasm` imports a Postgres host binding the container's
 `spin.toml` doesn't grant — not a podman/arm64/WASM compatibility problem.
 Pre-existing gap in 003, out of scope to fix here, noted for the record only.
+
+**Measured container tax** (from 003's own benchmark, commit `fd4f23f`): the
+same Spin component costs **177 ms** cold start run natively (`spin up`) vs
+**1,238 ms** wrapped in a podman container — a **+1,061 ms** tax, ~7x, and 5.3x
+over 003's own <200ms hypothesis (now marked Rejected there). That tax is 6x
+larger than the WASM runtime's *entire* native cold start. Wrapping a WASM
+runtime in an OCI container throws away most of what WASM bought you — the
+direct motivation for architecture #3 (below): don't wrap a WASM runtime in a
+container, make WASM *replace* the container.
+
+**Separately**: 003's leg 2c is currently blocked because its component was
+built against Spin 4.0.0's `spin:postgres/postgres@4.0.0` import, and no
+published `ghcr.io/fermyon/spin` container image implements it — the newest
+published tag is v3.1.2 (`spin:latest`/`spin:canary` don't resolve or fail
+identically). The host CLI (4.0.0) is ahead of every published container
+image. Worth flagging as a pattern, not a one-off: containerizing a WASM
+runtime can carry a version-skew cost on top of the cold-start tax above.
+
+### 2b. crun-wasm — podman's own WASM-capable OCI runtime **[PARTIALLY VERIFIED — blocked]**
+
+A claim worth testing: podman can reportedly select a WASM-capable OCI
+runtime (`crun` built with the wasm feature, "crun-wasm") the same way it
+selects `runc`, via `[engine.runtimes]` in `containers.conf`, and — because
+`podman play kube` shares container creation with `podman run` — a pod's
+`runtimeClassName` would route to it too. If true, this would close the gap
+between #2 (WASM runtime *inside* a container) and #3 (WASM *as* the
+container) using tooling **already installed here**, no containerd/k8s
+required. Treat everything below as what was actually run, not a restatement
+of that claim.
+
+**Confirmed genuinely available on this machine, inside the podman machine
+VM** (podman runs in a Linux VM on macOS — the `crun` that matters is the
+one *inside* it, checked via `podman machine ssh`, not any Homebrew crun on
+the Mac host):
+
+```
+$ podman machine ssh -- crun --version
+crun version 1.24
+...
+spec: 1.0.0
++SYSTEMD +SELINUX +APPARMOR +CAP +SECCOMP +EBPF +CRIU +LIBKRUN +WASM:wasmedge +YAJL
+
+$ podman machine ssh -- which crun-wasm
+/usr/bin/crun-wasm
+```
+
+So: yes, this VM's `crun` is genuinely built with `+WASM:wasmedge`, and a
+separate `crun-wasm` binary exists at `/usr/bin/crun-wasm`. An OCI-Wasm image
+was built earlier this session (`localhost/hello-crun-wasm:latest`, 43.9 KB —
+confirmed via `podman images`), so image construction works.
+
+**Blocked at the invocation step.** Selecting that runtime failed two
+different ways:
+
+```
+$ podman run --rm --runtime=/usr/bin/crun-wasm localhost/hello-crun-wasm:latest
+Error: unknown flag: --runtime
+```
+
+This podman client (6.0.1) does not expose a `--runtime` flag on `podman run`
+at all (confirmed: `podman run --help` has no `--runtime` entry, only
+`--cpu-rt-runtime`). Runtime selection here is `containers.conf`-only, not a
+CLI override — and locating/writing that file inside the VM
+(`/etc/containers/containers.conf` doesn't exist; the actual path wasn't
+found before time ran out) is the next concrete step, **not completed**.
+
+**Not verified, explicitly**: `containers.conf` registration, `podman run`
+actually executing a `.wasm` via `crun-wasm`, and the `podman play kube` +
+`runtimeClassName` path that would mirror the k8s RuntimeClass pattern. This
+is a real, promising lead — not a dead end — but stops here as "blocked at
+runtime selection," not "doesn't work."
 
 ### 3. WASM as the workload via a containerd shim — the interesting one **[VERIFIED]**
 
@@ -423,8 +502,11 @@ above, not built here.
 │   ├── verify-k3d-spinkube.sh        # architecture 3 via k3d + SpinKube CRDs
 │   ├── verify-platform-runtimes.sh   # installs/version-checks all 4 platform runtimes
 │   └── portability-test.sh           # the 5-runtime portability matrix
-└── portability/
-    └── hello/                        # the wasi-http component under test (wash template)
+├── portability/
+│   └── hello/                        # the wasi-http component under test (wash template)
+└── crun-wasm/                        # 2b leg — blocked at runtime selection, see README
+    ├── Containerfile                 # FROM scratch, COPY hello.wasm, ENTRYPOINT — no Linux userspace
+    └── hello/                        # minimal WASI command (Rust, wasm32-wasip1)
 ```
 
 ## Prerequisites

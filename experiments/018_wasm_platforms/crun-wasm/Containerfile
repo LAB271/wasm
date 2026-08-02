@@ -1,0 +1,5 @@
+# OCI-Wasm image: the .wasm IS the workload. No base image, no Linux userspace —
+# `FROM scratch` means this image contains exactly one file.
+FROM scratch
+COPY hello.wasm /hello.wasm
+ENTRYPOINT ["/hello.wasm"]
