@@ -44,7 +44,7 @@ churn if you rerun these scripts.
 | H7 | The same component runs unmodified on Cloudflare Workers (workerd) | **Refuted**, and more fundamentally than H6 — V8 can't even parse the Component Model's binary format; Workers only understands core Wasm modules |
 | H8 | AKS's WASI node pool preview is still available today | **Refuted** — retired, replaced by a SpinKube-on-AKS path |
 | H9 | AWS has no first-class native WASM compute platform | **Confirmed** (by absence — see Cloud provider landscape) |
-| H10 | podman can select a WASM-capable OCI runtime (crun-wasm) the same way it selects runc | **Partially confirmed, blocked** — the VM's crun is genuinely `+WASM:wasmedge` and `crun-wasm` exists, but this podman client (6.0.1) has no `--runtime` flag on `run`; `containers.conf`-based registration not completed |
+| H10 | podman can select a WASM-capable OCI runtime (crun-wasm) the same way it selects runc | **Rejected as framed — capability confirmed by another route** (§3b). Podman never *selects* a WASM runtime: there is no `--runtime` flag on `run`, no `[engine.runtimes]` block, and no `containers.conf` in the VM. None are needed, because the default `crun` is already `+WASM:wasmedge` and dispatch happens on the `module.wasm.image/variant` annotation. WASM-as-workload verified running via both `podman run` and `podman play kube`, at 217 ms median cold start |
 
 ---
 
@@ -577,7 +577,7 @@ above, not built here.
 │   └── portability-test.sh           # the 5-runtime portability matrix
 ├── portability/
 │   └── hello/                        # the wasi-http component under test (wash template)
-└── crun-wasm/                        # 2b leg — blocked at runtime selection, see README
+└── crun-wasm/                        # 3b leg — VERIFIED: WASM as workload via podman + crun
     ├── Containerfile                 # FROM scratch, COPY hello.wasm, ENTRYPOINT — no Linux userspace
     ├── hello/                        # minimal WASI command (Rust, wasm32-wasip1)
     └── pod-wasm.yaml                 # podman play kube — verified running (§3b);
