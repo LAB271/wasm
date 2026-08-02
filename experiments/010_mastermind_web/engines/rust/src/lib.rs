@@ -1,3 +1,11 @@
+#![no_std]
+
+#[cfg(target_arch = "wasm32")]
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
+
 const COLORS: usize = 6;
 const PEGS: usize = 4;
 

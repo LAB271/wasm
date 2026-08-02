@@ -8,5 +8,7 @@ name = "mastermind-guest"
 path = "src/main.rs"
 
 [profile.release]
-opt-level = "s"
+opt-level = "z"    # optimize for size (was "s")
+lto = true         # link-time optimization
 panic = "abort"
+strip = true       # strip symbols

@@ -20,12 +20,15 @@ fi
 OUT=output
 mkdir -p "$OUT"
 
+# Target dir is inside app/
+TARGET="app/target/wasm32-unknown-unknown"
+
 # ─── Leg 1: Baseline (debug) ───────────────────────────────────────────────────
 
 echo ""
 echo "Leg 1: Baseline (no optimization)..."
 cargo build --manifest-path app/Cargo.toml --target wasm32-unknown-unknown
-cp target/wasm32-unknown-unknown/debug/mastermind_wasm.wasm "$OUT/leg1_baseline.wasm"
+cp "$TARGET/debug/mastermind_wasm.wasm" "$OUT/leg1_baseline.wasm"
 
 # ─── Leg 2: Release + LTO ──────────────────────────────────────────────────────
 
@@ -55,7 +58,7 @@ mv app/Cargo.toml app/Cargo.toml.bak
 mv app/Cargo.toml.leg2 app/Cargo.toml
 
 cargo build --manifest-path app/Cargo.toml --target wasm32-unknown-unknown --release
-cp target/wasm32-unknown-unknown/release/mastermind_wasm.wasm "$OUT/leg2_lto.wasm"
+cp "$TARGET/release/mastermind_wasm.wasm" "$OUT/leg2_lto.wasm"
 
 mv app/Cargo.toml.bak app/Cargo.toml
 
@@ -66,7 +69,7 @@ if [ "$HAS_WASM_OPT" -eq 1 ]; then
     echo "Leg 3: Release + wasm-opt -Oz..."
 
     cargo build --manifest-path app/Cargo.toml --target wasm32-unknown-unknown --release
-    wasm-opt -Oz target/wasm32-unknown-unknown/release/mastermind_wasm.wasm -o "$OUT/leg3_wasm_opt.wasm"
+    wasm-opt -Oz "$TARGET/release/mastermind_wasm.wasm" -o "$OUT/leg3_wasm_opt.wasm"
 fi
 
 # ─── Leg 4: Release + LTO + wasm-opt -Oz ───────────────────────────────────────
@@ -96,7 +99,7 @@ codegen-units = 1
 EOF
 
     cargo build --manifest-path app/Cargo.toml --target wasm32-unknown-unknown --release
-    wasm-opt -Oz target/wasm32-unknown-unknown/release/mastermind_wasm.wasm -o "$OUT/leg4_lto_wasm_opt.wasm"
+    wasm-opt -Oz "$TARGET/release/mastermind_wasm.wasm" -o "$OUT/leg4_lto_wasm_opt.wasm"
 
     mv app/Cargo.toml.bak app/Cargo.toml
 fi
@@ -130,6 +133,7 @@ cat > app/src/lib.rs.leg5 << 'EOF'
 //! Minimal Mastermind (no random) for size comparison.
 
 #![no_std]
+#![allow(static_mut_refs)]
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -235,6 +239,7 @@ mod alloc_impl {
 
     static mut HEAP: [u8; 8192] = [0; 8192];
     static mut HEAP_PTR: usize = 0;
+    const HEAP_SIZE: usize = 8192;
 
     unsafe impl GlobalAlloc for BumpAllocator {
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -243,7 +248,7 @@ mod alloc_impl {
             let ptr = HEAP_PTR;
             let aligned = (ptr + align - 1) & !(align - 1);
             let new_ptr = aligned + size;
-            if new_ptr > HEAP.len() {
+            if new_ptr > HEAP_SIZE {
                 core::ptr::null_mut()
             } else {
                 HEAP_PTR = new_ptr;
@@ -267,9 +272,9 @@ mv app/src/lib.rs.leg5 app/src/lib.rs
 cargo build --manifest-path app/Cargo.toml --target wasm32-unknown-unknown --release
 
 if [ "$HAS_WASM_OPT" -eq 1 ]; then
-    wasm-opt -Oz target/wasm32-unknown-unknown/release/mastermind_wasm.wasm -o "$OUT/leg5_minimal.wasm"
+    wasm-opt -Oz "$TARGET/release/mastermind_wasm.wasm" -o "$OUT/leg5_minimal.wasm"
 else
-    cp target/wasm32-unknown-unknown/release/mastermind_wasm.wasm "$OUT/leg5_minimal.wasm"
+    cp "$TARGET/release/mastermind_wasm.wasm" "$OUT/leg5_minimal.wasm"
 fi
 
 mv app/src/lib.rs.bak app/src/lib.rs
@@ -304,9 +309,9 @@ mv app/Cargo.toml.leg6 app/Cargo.toml
 cargo build --manifest-path app/Cargo.toml --target wasm32-unknown-unknown --release
 
 if [ "$HAS_WASM_OPT" -eq 1 ]; then
-    wasm-opt -Oz target/wasm32-unknown-unknown/release/mastermind_wasm.wasm -o "$OUT/leg6_full_stdlib.wasm"
+    wasm-opt -Oz "$TARGET/release/mastermind_wasm.wasm" -o "$OUT/leg6_full_stdlib.wasm"
 else
-    cp target/wasm32-unknown-unknown/release/mastermind_wasm.wasm "$OUT/leg6_full_stdlib.wasm"
+    cp "$TARGET/release/mastermind_wasm.wasm" "$OUT/leg6_full_stdlib.wasm"
 fi
 
 mv app/Cargo.toml.bak app/Cargo.toml

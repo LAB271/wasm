@@ -1,0 +1,17 @@
+spin_manifest_version = 2
+
+[application]
+name = "leg-b-serverless"
+version = "0.1.0"
+description = "Serverless WASM web server - Leg B of experiment 014"
+
+[[trigger.http]]
+route = "/..."
+component = "api"
+
+[component.api]
+source = "target/wasm32-wasip2/release/leg_b_serverless.wasm"
+allowed_outbound_hosts = []
+files = [{ source = "../data", destination = "/" }]
+[component.api.build]
+command = "cargo build --release --target wasm32-wasip2"

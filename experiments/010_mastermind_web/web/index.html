@@ -13,16 +13,49 @@
       <h1>MASTERMIND<span class="wasm-badge">WASM</span></h1>
       <p class="tagline">
         Scoring runs entirely in a compiled <code>.wasm</code> module — every guess calls
-        a pure <code>score_guess()</code> export, no server round-trip. Two interchangeable
-        engines (Rust and AssemblyScript) compile to the same ABI — pick one with
-        <code>?engine=rust</code> or <code>?engine=as</code>.
+        a pure <code>score_guess()</code> export. Play manually or let the solver find the code.
       </p>
     </header>
 
     <section id="status-bar">
       <div class="stat"><span class="label">Attempt</span><span id="attempt-count">0</span><span class="label">/ <span id="attempt-max">10</span></span></div>
-      <div class="stat"><span class="label">Engine</span><span id="engine-status" class="loading">loading wasm…</span></div>
+      <div class="stat"><span class="label">Possible</span><span id="poss-count">1296</span></div>
+      <div class="stat">
+        <span class="label">Engine</span>
+        <div class="select-wrap small">
+          <select id="engine-select">
+            <option value="rust">Rust</option>
+            <option value="as">AssemblyScript</option>
+          </select>
+        </div>
+        <span id="engine-status" class="loading">loading…</span>
+      </div>
       <button id="new-game-btn">New Game</button>
+    </section>
+
+    <section id="solver-bar">
+      <div id="solver-controls">
+        <label for="strategy-select">Strategy:</label>
+        <div class="select-wrap">
+          <select id="strategy-select">
+            <optgroup label="Adaptive (smart)">
+              <option value="expected" selected>Koyama &amp; Lai (expected)</option>
+              <option value="minimax">Knuth (minimax)</option>
+              <option value="entropy">Entropy (info theory)</option>
+            </optgroup>
+            <optgroup label="Static (non-adaptive)">
+              <option value="static-pairs">Static: Pairs</option>
+              <option value="static-mono">Static: Monochrome</option>
+            </optgroup>
+            <optgroup label="Bounded memory">
+              <option value="memory-one">Memory-1 (last guess only)</option>
+            </optgroup>
+          </select>
+        </div>
+        <button id="solve-step-btn">Step</button>
+        <button id="solve-btn">Solve</button>
+      </div>
+      <div id="strategy-desc"></div>
     </section>
 
     <section id="board" aria-label="Guess history"></section>

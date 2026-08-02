@@ -20,7 +20,11 @@ build: build-rust build-as build-ui ## Build both engines and the UI
 
 build-rust: ## Compile engines/rust -> web/engine-rust.wasm (cargo, wasm32-unknown-unknown)
 	cd engines/rust && cargo build --target wasm32-unknown-unknown --release
-	cp engines/rust/target/wasm32-unknown-unknown/release/mastermind_engine.wasm web/engine-rust.wasm
+	@if command -v wasm-opt >/dev/null 2>&1; then \
+		wasm-opt -Oz engines/rust/target/wasm32-unknown-unknown/release/mastermind_engine.wasm -o web/engine-rust.wasm; \
+	else \
+		cp engines/rust/target/wasm32-unknown-unknown/release/mastermind_engine.wasm web/engine-rust.wasm; \
+	fi
 
 build-as: ## Compile engines/assemblyscript -> web/engine-as.wasm (asc)
 	@if [ ! -d engines/assemblyscript/node_modules ]; then \
