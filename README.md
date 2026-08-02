@@ -103,7 +103,7 @@ Reference: [AWS's Stealth Container Killer](https://aws.plainenglish.io/awss-ste
 | [017](experiments/017_float_determinism/) | float_determinism | done | Cross-engine float determinism: JS `Math.*` vs WASM libm, ULP-level |
 | [018](experiments/018_wasm_platforms/) | wasm_platforms | done | Local-testability matrix across 4 container architectures (incl. verified podman+crun WASM-as-workload) and 4 platform runtimes; wasi-http portability demonstrated across 5 runtimes |
 | [019](experiments/019_wasm_debugging/) | wasm_debugging | done | Debuggability vs binary size — DWARF/name-section cost across 4 tiers; the other side of 010 |
-| [020](experiments/020_js_vs_wasm_crossover/) | js_vs_wasm_crossover | done | Where WASM stops paying: data shape (scalars→objects) and work-per-crossing, vs properly-tuned JS |
+| [020](experiments/020_js_vs_wasm_crossover/) | js_vs_wasm_crossover | done | Where WASM stops paying: rematches 010's 1.68x to parity (JS formulation matters more than language — deopts, not branches); marshal-vs-compute across scalars/arrays/strings/objects; batching crossover at K≈4-16 |
 
 ### How to read these
 

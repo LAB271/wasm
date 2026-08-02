@@ -374,16 +374,29 @@ formulations, all parity-checked bit-for-bit against the WASM:
 | JS, naive (4 array allocations per call) | 51.5 ms | 3.39x |
 | WASM, `wasm-opt -O3` | 24.2 ms | 1.59x *slower than `-Oz`* |
 
-Packing six 4-bit counters into a single `i32` eliminates the branching that made the
-switch version slow, and **closes the gap to 1.14x**. The earlier number overstated
-WASM's advantage roughly 1.5-fold — not because the measurement was wrong, but because
-the opponent wasn't trying hard enough.
+**The mechanism is deoptimization, not instruction count.** 020 re-ran the rematch under
+`node --trace-opt --trace-deopt`: the tuned-switch version **deoptimizes 20 times**,
+including mid-timed-round, because the switch chains never accumulate enough type
+feedback for TurboFan to commit. The bit-packed version has **zero** branches to
+mis-speculate and **zero** deopt events. It isn't executing fewer instructions so much as
+never falling out of optimized code.
 
-So the honest verdict is narrower than first written: **~3x the bytes for ~1.14x the
-speed.** For manual play — ten calls per game — the WASM is pure overhead and JS is
-plainly the right answer. Even for the solver, 2 ms per step against well-written JS is
-not a reason to ship a second toolchain. Mastermind sits *below* the crossover, not on
-it, and it took a properly optimised opponent to see that.
+**How close is it really?** Close enough that the direction depends on the harness. The
+direct rematch above puts WASM 1.14x ahead; 020's granularity sweep, calling one pair at
+a time through its batch entry point, puts bit-packed JS **1.3–1.5x ahead**. Per-element
+compute is ~5.5–6.2 ns for WASM against ~5.9–7.8 ns for JS. The honest reading is
+**parity**, not a win for either — and every measurement agrees the 1.68x is gone.
+
+So the verdict is narrower than first written: **~3x the bytes for roughly break-even
+speed.** For manual play — ten calls per game — the WASM is pure overhead. For the
+solver, it is not a reason to ship a second toolchain.
+
+**What would actually make WASM win here is batching, not language choice.** 020 found
+the crossover at **K≈4–16 pairs per call**: hand WASM sixteen pairs at once instead of
+one, and it pulls decisively ahead, because the ~5.5 ns crossing is amortized over real
+work. This experiment's solver calls `score_guess` one pair at a time — the worst
+possible shape. The 1.68x was never really language-vs-language; it was one JS
+formulation against a call pattern that suited neither.
 
 The generalisable rule is **amortization**: WASM earns its bytes when the work done per
 byte shipped is high enough to repay the binary's fixed overhead. At 950 bytes of
