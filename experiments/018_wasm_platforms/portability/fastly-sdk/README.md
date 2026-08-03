@@ -29,8 +29,8 @@ No experimental banner, no linker error. This is the supported path.
 
 ## Three files, no scaffolder
 
-`fastly compute init` **panics** on this CLI build (`vHEAD-89619cb`, a Homebrew
-HEAD build rather than a release):
+`fastly compute init` **panics** — and not because of an unreleased build. First
+seen on `vHEAD-89619cb`, then reproduced identically on **stable v15.4.0**:
 
 ```
 panic: runtime error: index out of range [0] with length 0
@@ -38,10 +38,23 @@ panic: runtime error: index out of range [0] with length 0
 ```
 
 The starter-kit list comes back empty and the code indexes `[0]` unconditionally.
-It fails interactively too, so it is a CLI bug, not a TTY problem.
+Reproduced interactively, non-interactively, and with `--accept-defaults`, on a
+released version. A genuine upstream bug, worth filing.
 
-It is also unnecessary. A Compute project is `Cargo.toml` (depend on `fastly`),
-`src/main.rs`, and `fastly.toml`. Then:
+**The fault is isolated to the starter-kit listing.** Bypass that one prompt and
+the same command works:
+
+```bash
+fastly compute init --from https://github.com/fastly/compute-starter-kit-rust-default
+# SUCCESS: scaffolds Cargo.toml, fastly.toml, rust-toolchain.toml, src/
+```
+
+Upgrading the CLI (HEAD -> 15.4.0) left Viceroy at 0.20.1, so leg 4's finding is
+unchanged by it.
+
+This directory takes the third option: skip the scaffolder entirely, since a
+Compute project is only `Cargo.toml` (depend on `fastly`), `src/main.rs`, and
+`fastly.toml`. Then:
 
 ```bash
 fastly compute build      # cargo build --target wasm32-wasip1 + package
