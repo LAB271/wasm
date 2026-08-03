@@ -15,7 +15,9 @@
 | Pre-built server / HTTP black box | [0004](0004-archetype-prebuilt-server-http-blackbox.md) | `wasmtime serve` / `spin up` (off-the-shelf) | `wasi:http/incoming-handler` component | N/A (HTTP, not a terminal) | not yet measured (001/003 both "results pending") | not yet measured |
 | Embedded runtime as a library | [0005](0005-archetype-embedded-runtime-library.md) | Native binary linking `wasmtime` | `wasm32-unknown-unknown` or `wasm32-wasip1` | **Yes — the only archetype proven genuinely interactive** | N/A (not artifact-size focused) | 4ms warm-cache / 190ms true cold |
 | Interpreter-in-WASM | [0006](0006-archetype-interpreter-in-wasm.md) | Node, or headless Chromium | N/A — ships CPython, not your program | No (source, not a terminal session) | 11.9MB | 845ms |
-| Guest-owned sockets | [0008](0008-archetype-guest-owned-sockets.md) | `wasmtime run --wasi inherit-network` | `wasm32-wasip2` + `wasi:sockets` | N/A (TCP server) | not yet measured (014 pending) | not yet measured |
+| Guest-owned sockets | [0008](0008-archetype-guest-owned-sockets.md) | `wasmtime run --wasi inherit-network` | `wasm32-wasip2` + `wasi:sockets` | N/A (TCP server) | 132KB (014 leg A) | not measured — 014 has no cold-start bench | not yet measured |
+| WASM as the OCI workload | [0010](0010-archetype-wasm-as-the-oci-workload.md) | containerd shim / `crun`, under an orchestrator | `wasm32-wasip1` in a `FROM scratch` image | No | **43.9KB** (018) | **+48ms** over the container floor (018) |
+| Host-import bridge | [0011](0011-archetype-host-import-bridge.md) | native host embedding wasmtime, plus bespoke imports | any, usually `wasm32-wasip1` | Inherits from the host | ~400B guest (015) | inherits [0005](0005-archetype-embedded-runtime-library.md); ~5ns per import call (016) |
 
 ## All experiments, mapped
 
@@ -103,3 +105,20 @@ a reason to understand what you're signing up for.
 
 See [ADR-0003](0003-archetype-custom-hand-rolled-abi.md) for the full details
 of these bugs and how they were found.
+
+## Reading the numbers in this guide
+
+Every figure here is a measurement from the cited leg. Two cautions, both learned
+the hard way:
+
+- **A hypothesis is not a result.** 001's H2 predicted containers at "~500ms+";
+  001 *measured* ~54ms, and the prediction nonetheless reached the root README as
+  though it were the finding. When a number here disagrees with an experiment's
+  hypotheses table, the results table wins.
+- **`cold_start_ms` polls at 100ms.** Anything reported below ~100ms means
+  "answered on the first poll" and cannot be ordered against another sub-100ms
+  figure.
+
+Where a cell reads *not measured*, no benchmark exists — notably serverless
+cold start, which 014 never benchmarked despite being the archetype most often
+credited with the best one.
