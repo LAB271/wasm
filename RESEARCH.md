@@ -53,8 +53,8 @@ against a real WASI host.
 browser tab. Shims exist ([`@bjorn3/browser_wasi_shim`](https://github.com/bjorn3/browser_wasi_shim),
 `@wasmer/wasi`) but they emulate a filesystem and stdio over JS objects — useful for
 a playground, not equivalent to a host. See experiment
-[004](../experiments/004_static_wasi_hello/) and
-[010](../experiments/010_mastermind_web/) for what this costs in practice.
+[004](experiments/004_static_wasi_hello/) and
+[010](experiments/010_mastermind_web/) for what this costs in practice.
 
 ---
 
@@ -96,7 +96,7 @@ stderr), `fd_read` (stdin), `proc_exit`. Peers with the same capability:
 `wasmer run`, `wasmedge`, `wazero run`, `iwasm` (WAMR). Node has `node:wasi`
 behind `--experimental-wasi-unstable-preview1`.
 
-Experiment [011](../experiments/011_mastermind_cli_wasi/) already establishes the
+Experiment [011](experiments/011_mastermind_cli_wasi/) already establishes the
 baseline: pure Rust → `wasm32-wasip1` → real WASI `fd_read` stdin, fully
 interactive under `wasmtime run`. **Genuine interactive terminal I/O under WASM/WASI
 is not in question.** Anything that fails is host- or toolchain-specific.
@@ -235,7 +235,7 @@ Two things the sources settle for the container-replacement hypothesis:
 
 - **Cold start is real but the comparison is often rigged.** Modules instantiate
   without an OS to boot or a container runtime to start. Experiment
-  [009](../experiments/009_rust_native_host/) already checks a published "200µs"
+  [009](experiments/009_rust_native_host/) already checks a published "200µs"
   claim against its own methodology — the sources in §3 do not change that
   conclusion, and vendor benchmarks should be read the same way.
 - **The Component Model is what makes server-side Wasm more than a sandbox.** WIT

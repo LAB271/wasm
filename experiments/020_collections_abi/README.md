@@ -9,6 +9,20 @@ a number is derived rather than measured, it says so.
 ## The problem
 
 WebAssembly core has `i32`, `i64`, `f32`, `f64`, plus `v128` (SIMD) and `funcref`/`externref`.
+
+> **Scope, and a Wasm 3.0 caveat.** That list describes the core value types the
+> toolchains measured here actually emit. **Wasm 3.0 (completed 2025-09-17) adds
+> WasmGC — real `struct` and `array` heap types** — so "WebAssembly has no
+> aggregates" is no longer true of the *specification*. It remains true of this
+> experiment, because neither Rust (`wasm32-*`, linear memory) nor
+> AssemblyScript (linear memory plus its own GC) targets WasmGC: both compile
+> collections down to bytes in linear memory, which is why the conventions below
+> are what you actually deal with today.
+>
+> Languages that *do* target WasmGC — Kotlin/Wasm, Dart, Java via J2CL, OCaml,
+> Scheme — would need a separate experiment. There the boundary question changes
+> shape entirely: aggregates become native types rather than conventions, and the
+> interesting cost moves from marshalling to GC interaction. Not measured here.
 That is the entire type system a function signature can use.
 
 What it has **no concept of** is aggregates. There is no string. No list. No map. No set.
@@ -314,7 +328,7 @@ gives you a defined layout for a record without inventing one.
 
 ## Maps
 
-**There is no map in WebAssembly.** Not "there is an awkward one" — there is no aggregate
+**There is no map in the core types these toolchains emit.** Not "there is an awkward one" — there is no aggregate
 type at all, no key/value instruction, nothing. There is also no default convention. Every
 option below is something a person chose.
 
