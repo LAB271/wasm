@@ -85,6 +85,46 @@ for the measurement that couldn't be taken) rather than papered over.
   guest's instantiation — a different, larger number than any Worker- or
   library-embedded archetype in this repo.
 
+## How far "any WASI-HTTP-compliant runtime" actually goes (018)
+
+This ADR's central promise is that a component targeting
+`wasi:http/incoming-handler` runs on any conforming host.
+[Experiment 018](../../experiments/018_wasm_platforms/) tested that with one
+component — wasmCloud's `http-hello-world` on `wasm32-wasip2`, no platform SDK —
+run byte-identically across six legs:
+
+| Host | Outcome |
+|------|---------|
+| `wasmtime serve` | **runs unmodified** |
+| Spin | **runs unmodified** — `spin.toml` wrapper only, zero rebuild |
+| wasmCloud (`wash dev`) | **runs unmodified** |
+| Cloudflare Workers, as-is | **blocked** — V8 loads core modules only (`found 0d 00 01 00, wants 01 00 00 00`) |
+| Cloudflare Workers, `jco`-transpiled | **runs** — same bytes, plus a core-module transpile and ~180 lines of host adapter |
+| Fastly Compute (Viceroy) | **blocked, permanently** — implements no `wasi:http` at any version |
+
+**So the promise holds, with a boundary worth stating: three of six unmodified.**
+"Any WASI-HTTP-compliant runtime" is true and the compliance set is smaller than
+the phrase suggests.
+
+The two failures differ in kind, and only one is bridgeable:
+
+- **Cloudflare** is a *container-format* gap. V8 parses core modules, not
+  components. Bridgeable, and 018 bridges it: `jco transpile` plus a hand-written
+  wasi:http host, because `preview2-shim` implements only the client half.
+- **Fastly** is a *missing-interface* gap. Viceroy's entry point is
+  `fastly:compute/http-incoming@0.1.0`. 018 proved this is not a version problem
+  by patching the component's imports from `@0.2.9` to `@0.2.6` in place (same
+  byte length, still validates) — the error simply moved to
+  `wasi:http/types@0.2.6`. Passing requires rewriting against Fastly's own WIT,
+  i.e. abandoning this archetype for a platform SDK. Fastly's WASM story is
+  SDK-shaped, not wasi-http-shaped, and 018 leg 7 shows it serving 200 in ~500 µs
+  that way.
+
+**Consequence for choosing this archetype:** it is real portability across the
+component-model runtimes (wasmtime, Spin, wasmCloud), not across "WASM platforms"
+generally. Budget a second build for Fastly, and a transpile plus host adapter for
+Workers.
+
 ## When this is the right shape
 
 Multiple teams/languages need to ship interchangeable HTTP handlers behind one

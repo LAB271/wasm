@@ -1,4 +1,4 @@
-# Decision Guide: Choosing Among the Six Archetypes
+# Decision Guide: Choosing Among the Eight Archetypes
 
 > Synthesizes [ADR-0002](0002-archetype-browser-worker-wasi-shim.md) through
 > [ADR-0006](0006-archetype-interpreter-in-wasm.md), plus
@@ -28,12 +28,19 @@
 | 005 | stdout_capture_load | [0002](0002-archetype-browser-worker-wasi-shim.md) |
 | 006 | worker_kill_switch | [0002](0002-archetype-browser-worker-wasi-shim.md) |
 | 007 | custom_runtime_vs_interpreter | `custom_runtime` leg: [0003](0003-archetype-custom-hand-rolled-abi.md). `componentize-py` leg: [0004](0004-archetype-prebuilt-server-http-blackbox.md) (failed — version skew, reported honestly). Pyodide leg: [0006](0006-archetype-interpreter-in-wasm.md) |
+| 008 | js_vs_wasm_crossover | N/A — measurement utility |
 | 009 | rust_native_host | [0005](0005-archetype-embedded-runtime-library.md) — zero-import variant |
 | 010 | mastermind_web | [0003](0003-archetype-custom-hand-rolled-abi.md) — pure library variant |
 | 011 | mastermind_cli_wasi | [0005](0005-archetype-embedded-runtime-library.md) — full WASI command variant |
 | 012 | stdlib_size_matrix | N/A — measurement utility |
 | 013 | unicode_strategies | N/A — measurement utility |
 | 014 | wasm_webserver | Leg A: [0008](0008-archetype-guest-owned-sockets.md). Leg B: [0004](0004-archetype-prebuilt-server-http-blackbox.md) |
+| 015 | postgres_bridge | [0011](0011-archetype-host-import-bridge.md) — database capability lent by the host |
+| 016 | ffi_assemblyscript | [0011](0011-archetype-host-import-bridge.md) — hardware crypto lent by the host |
+| 017 | float_determinism | N/A — measurement utility |
+| 018 | wasm_platforms | Arch 1: plain container (control). Arch 2: [0004](0004-archetype-prebuilt-server-http-blackbox.md) wrapped in a container — the anti-pattern. Arch 3 + leg 3b: [0010](0010-archetype-wasm-as-the-oci-workload.md). Portability legs: [0004](0004-archetype-prebuilt-server-http-blackbox.md), boundary-tested |
+| 019 | wasm_debugging | N/A — measurement utility |
+| 020 | collections_abi | N/A — measurement utility; documents the marshalling conventions [0011](0011-archetype-host-import-bridge.md) and [0003](0003-archetype-custom-hand-rolled-abi.md) depend on |
 
 ## Decision flow
 

@@ -8,11 +8,13 @@
 | [0004](0004-archetype-prebuilt-server-http-blackbox.md) | Archetype — pre-built server consumed as an HTTP black box | Accepted |
 | [0005](0005-archetype-embedded-runtime-library.md) | Archetype — embedded runtime as a library (in-process, native host) | Accepted |
 | [0006](0006-archetype-interpreter-in-wasm.md) | Archetype — interpreter-in-WASM (ship the runtime, not the program) | Accepted |
-| [0007](0007-archetype-decision-guide.md) | Decision guide — choosing among the six archetypes | Accepted |
+| [0007](0007-archetype-decision-guide.md) | Decision guide — choosing among the eight archetypes | Accepted |
 | [0008](0008-archetype-guest-owned-sockets.md) | Archetype — guest-owned sockets via wasi:sockets | Accepted |
 | [0009](0009-isolation-models-browser-context-vs-wasi-capabilities.md) | Isolation models — browser contexts vs WASI capabilities | Accepted |
+| [0010](0010-archetype-wasm-as-the-oci-workload.md) | Archetype — WASM as the OCI workload (shim replaces runc) | Accepted |
+| [0011](0011-archetype-host-import-bridge.md) | Archetype — host-import bridge (keep the guest tiny, lend it capabilities) | Accepted |
 
-ADRs 0002–0006, 0008 each document one recurring architecture observed across this
+ADRs 0002–0006, 0008, 0010, 0011 each document one recurring architecture observed across this
 repo's experiments — not a single decision made once, but a *shape* that keeps
 reappearing, with the trade-offs each occurrence actually measured. 0007 ties them
 together into one comparison. 0009 is a different genre again: a cross-cutting
