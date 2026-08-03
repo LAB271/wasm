@@ -26,10 +26,16 @@ install: ## Install everything not already present (k3d, kubectl, helm, wash, fa
 
 # === Verify (the local-testability matrix, one target per architecture/leg) ===
 
-verify: verify-baseline verify-platforms portability-test ## Run the fast verification legs (skips the two slow/heavy k8s+shim installs)
+# Each leg reports its own outcome, so one unavailable prerequisite must not
+# abort the others — a missing container engine should not hide the portability
+# results. `-` lets make continue; the legs' own SKIP/BLOCKED/BROKEN lines carry
+# the verdict.
+verify: ## Run the fast verification legs (skips the two slow/heavy k8s+shim installs)
+	-@./scripts/verify-baseline.sh
 	@echo ""
-	@echo "Run 'make verify-containerd-shim' and 'make verify-k3d-spinkube' separately —"
-	@echo "they install a containerd shim / spin up a k3d cluster and take longer."
+	-@./scripts/verify-platform-runtimes.sh
+	@echo ""
+	-@./scripts/portability-test.sh
 
 verify-baseline: ## Architecture 1: container running a normal process (docker run hello-world)
 	./scripts/verify-baseline.sh
