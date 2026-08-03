@@ -40,8 +40,8 @@ churn if you rerun these scripts.
 | H3 | Local k8s + SpinKube's RuntimeClass reproduces the shim architecture through a CRD, not just raw `ctr` | **Confirmed** — k3d + spin-operator + `wasmtime-spin-v2` RuntimeClass served real HTTP |
 | H4 | Docker's own `--platform=wasi/wasm32` flag works on a non-Docker-Desktop daemon | **Refuted** — fails with "does not provide the specified platform"; that flag is a Docker Desktop-specific feature, not a generic dockerd capability |
 | H5 | A single wasi-http component (no platform SDK) runs unmodified on Spin, raw wasmtime, and wasmCloud | **Confirmed** — same `.wasm`, zero rebuild, ran on all three |
-| H6 | The same component runs unmodified on Fastly Compute (Viceroy) | **Refuted** — Viceroy's Component Model support is explicitly experimental; fails on a missing `wasi:http/types` linker implementation |
-| H7 | The same component runs unmodified on Cloudflare Workers (workerd) | **Refuted**, and more fundamentally than H6 — V8 can't even parse the Component Model's binary format; Workers only understands core Wasm modules |
+| H6 | The same component runs unmodified on Fastly Compute (Viceroy) | **Refuted, and unfixable today.** Viceroy 0.20.1 provides no `wasi:http` at *any* version — its HTTP entry point is `fastly:compute/http-incoming@0.1.0`. Proven by experiment, not inference: patching the component's imports from `@0.2.9` to `@0.2.6` (same byte length, so an in-place edit, still validates) moved the error to `wasi:http/types@0.2.6` and changed nothing else. Passing would mean rewriting the guest against Fastly's own WIT — i.e. a platform SDK, which is what this test exists to detect |
+| H7 | The same component runs unmodified on Cloudflare Workers (workerd) | **Refuted as stated, but achievable with a transpile step.** V8 rejects the component container outright (`expected version 01 00 00 00, found 0d 00 01 00`). Transpiled to a core module with `jco` and given a hand-written wasi:http + wasi:io host, the **byte-identical guest serves HTTP 200 on workerd** — see [§ Making Cloudflare pass](#making-cloudflare-pass-leg-6) and `portability/cf-worker/` |
 | H8 | AKS's WASI node pool preview is still available today | **Refuted** — retired, replaced by a SpinKube-on-AKS path |
 | H9 | AWS has no first-class native WASM compute platform | **Confirmed** (by absence — see Cloud provider landscape) |
 | H10 | podman can select a WASM-capable OCI runtime (crun-wasm) the same way it selects runc | **Rejected as framed — capability confirmed by another route** (§3b). Podman never *selects* a WASM runtime: there is no `--runtime` flag on `run`, no `[engine.runtimes]` block, and no `containers.conf` in the VM. None are needed, because the default `crun` is already `+WASM:wasmedge` and dispatch happens on the `module.wasm.image/variant` annotation. WASM-as-workload verified running via both `podman run` and `podman play kube`, at 217 ms median cold start |
@@ -472,6 +472,32 @@ runtime inside a Worker, not just adding a WIT world.
 Reproduce: `make portability-test`.
 
 ---
+
+## Making Cloudflare pass (leg 6)
+
+Leg 5 shows the component rejected by workerd. Leg 6 runs the *same bytes*
+successfully. Both are kept, because the gap between them is the finding.
+
+Four constraints, each discovered by hitting it:
+
+| # | Constraint | Fix |
+|---|-----------|-----|
+| 1 | V8 loads core modules only | `jco transpile` — `\0asm 0d 00 01 00` becomes `\0asm 01 00 00 00` |
+| 2 | workerd forbids unsettled top-level await | `--instantiation sync` |
+| 3 | sync instantiation needs a `WebAssembly.Module` synchronously | static `.wasm` imports (and *no* `[[rules]]` block — wrangler already has a `CompiledWasm` rule and a duplicate errors) |
+| 4 | `preview2-shim` implements only the **client** half of wasi:http | hand-written server host, `portability/cf-worker/wasi-http-host.js` |
+| 5 | glue does `e instanceof OutputStream` | wasi:io must come from the same owner, `wasi-io-host.js` — mixing shims gives `Resource error: Not a valid "OutputStream" resource` |
+
+Constraint 4 is the real one, and it is deeper than the binary format that gets
+all the attention. `preview2-shim`'s server-side types are empty stubs
+(`IncomingRequest: class IncomingRequest {}`), and `jco serve` only works because
+it uses the **Node** shim plus `node:http` — which workerd cannot provide, since a
+Worker *is* the server and never listens on a socket.
+
+Result: **portable, but not unmodified.** Same guest binary as wasmtime/Spin/
+wasmCloud — no source change, no recompile — plus a transpile step and ~180 lines
+of host adapter. That is a third outcome, not a PASS and not a FAIL, and the
+table reports it as such. Full walkthrough: `portability/cf-worker/README.md`.
 
 ## Cloud-provider landscape — **[RESEARCHED, not verified locally]**
 

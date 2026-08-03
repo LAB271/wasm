@@ -16,7 +16,7 @@ export PATH="$PATH:${NPM_BIN}"
 WASM=target/wasm32-wasip2/release/hello_world.wasm
 RESULTS=()
 
-echo "=== Portability test: one wasi-http component, five runtimes ==="
+echo "=== Portability test: one wasi-http component, six legs ==="
 echo ""
 echo "-- building (wash build -> cargo build --target wasm32-wasip2 --release) --"
 wash build
@@ -46,7 +46,7 @@ diagnose() {
 }
 
 # 1. wasmtime serve — the raw component-model runtime, no platform wrapper.
-echo "--- 1/5 wasmtime serve (no wrapper at all) ---"
+echo "--- 1/6 wasmtime serve (no wrapper at all) ---"
 (timeout 5 wasmtime serve -S cli "$WASM" --addr 127.0.0.1:19001 &>/tmp/wasm018-wasmtime.log &)
 sleep 2
 if curl -sS -f http://127.0.0.1:19001/ &>/tmp/wasm018-wasmtime-curl.log; then
@@ -58,7 +58,7 @@ pkill -f "wasmtime serve" 2>/dev/null || true
 sleep 1
 
 # 2. Spin — same .wasm, wrapped only in a spin.toml manifest (no rebuild).
-echo "--- 2/5 Spin (spin.toml wraps the SAME .wasm, zero rebuild) ---"
+echo "--- 2/6 Spin (spin.toml wraps the SAME .wasm, zero rebuild) ---"
 mkdir -p /tmp/wasm018-spin-wrap
 cp "$WASM" /tmp/wasm018-spin-wrap/hello_world.wasm
 cat > /tmp/wasm018-spin-wrap/spin.toml <<'EOF'
@@ -84,7 +84,7 @@ pkill -f "spin up" 2>/dev/null || true
 sleep 1
 
 # 3. wasmCloud (wash dev) — the component's native home.
-echo "--- 3/5 wash dev (wasmCloud's local host) ---"
+echo "--- 3/6 wash dev (wasmCloud's local host) ---"
 (timeout 12 wash dev --non-interactive &>/tmp/wasm018-wash.log &)
 sleep 8
 if curl -sS -f http://127.0.0.1:8000/ &>/tmp/wasm018-wash-curl.log; then
@@ -97,7 +97,7 @@ sleep 1
 
 # 4. Fastly Compute (Viceroy) — expected to fail: component support is
 #    explicitly experimental in Viceroy as of this writing.
-echo "--- 4/5 Fastly Compute / Viceroy ---"
+echo "--- 4/6 Fastly Compute / Viceroy ---"
 mkdir -p /tmp/wasm018-fastly-wrap/bin
 cp "$WASM" /tmp/wasm018-fastly-wrap/bin/main.wasm
 cat > /tmp/wasm018-fastly-wrap/fastly.toml <<'EOF'
@@ -122,7 +122,7 @@ sleep 1
 
 # 5. Cloudflare Workers (wrangler/workerd) — expected to fail: workerd (V8)
 #    only implements core Wasm modules, not the Component Model binary format.
-echo "--- 5/5 Cloudflare Workers / workerd ---"
+echo "--- 5/6 Cloudflare Workers / workerd (unmodified component) ---"
 mkdir -p /tmp/wasm018-cf-worker
 cp "$WASM" /tmp/wasm018-cf-worker/component.wasm
 cat > /tmp/wasm018-cf-worker/wrangler.toml <<'EOF'
@@ -146,6 +146,36 @@ else
     record "Cloudflare Workers" "FAIL (expected) — $(diagnose /tmp/wasm018-wrangler.log)"
 fi
 pkill -f "wrangler dev" 2>/dev/null || true
+
+# 6. Cloudflare Workers, the SAME component transpiled by jco. Leg 5 proves the
+#    component cannot be loaded as-is; this proves what it takes to load it
+#    anyway — a core-module transpile plus a hand-written wasi:http/wasi:io host.
+#    Note: cwd is portability/hello (set at the top), so paths are relative to it.
+echo "--- 6/6 Cloudflare Workers / workerd (jco-transpiled) ---"
+COMPONENT_ABS="$(pwd)/$WASM"
+CFW="$(cd ../cf-worker && pwd)"
+if ! command -v jco &>/dev/null; then
+    record "Cloudflare Workers (jco)" "SKIP — jco not installed (npm i -g @bytecodealliance/jco)"
+elif ! command -v wrangler &>/dev/null; then
+    record "Cloudflare Workers (jco)" "SKIP — wrangler not installed"
+else
+    ( cd "$CFW" && [ -d node_modules ] || npm install --silent --no-audit --no-fund >/dev/null 2>&1 )
+    rm -rf "$CFW/gen"
+    if ! ( cd "$CFW" && jco transpile "$COMPONENT_ABS" -o gen \
+             --map "wasi:http/types@0.2.9=./../wasi-http-host.js" \
+             --instantiation sync -q ) >/tmp/wasm018-jco.log 2>&1; then
+        record "Cloudflare Workers (jco)" "FAIL — jco transpile: $(diagnose /tmp/wasm018-jco.log)"
+    else
+        ( cd "$CFW" && timeout 60 wrangler dev --local --port 19005 --ip 127.0.0.1 &>/tmp/wasm018-cfw.log & )
+        sleep 15
+        if curl -sS -f -m 10 http://127.0.0.1:19005/ &>/tmp/wasm018-cfw-curl.log; then
+            record "Cloudflare Workers (jco)" "PASS — $(cat /tmp/wasm018-cfw-curl.log) (core-module transpile + ~180 lines of host adapter)"
+        else
+            record "Cloudflare Workers (jco)" "FAIL — $(diagnose /tmp/wasm018-cfw.log)"
+        fi
+        pkill -f "wrangler dev" 2>/dev/null || true
+    fi
+fi
 
 echo ""
 echo "=== Summary ==="
