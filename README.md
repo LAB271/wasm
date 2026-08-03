@@ -35,12 +35,13 @@ because the numbers differ by two orders of magnitude:
 |---|---|---|---|
 | **a. Embedded / CLI** | Your own process embeds wasmtime as a library; WASM is a sandboxed plugin | ~40 ms | [009](experiments/009_rust_native_host/), [011](experiments/011_mastermind_cli_wasi/), [015](experiments/015_postgres_bridge/), [016](experiments/016_ffi_assemblyscript/) |
 | **b. WASM runtime inside a container** | An OCI container runs Spin/wasmtime, which runs your module | **1,238 ms** | [003](experiments/003_wasm_compile/) legs 1b/2c |
-| **c. WASM *as* the workload** | A serverless host or a containerd/crun shim runs the module directly — no Linux userspace | ~5 ms | [014](experiments/014_wasm_webserver/), [018](experiments/018_wasm_platforms/) |
+| **c. WASM *as* the workload** | A serverless host or a containerd/crun shim runs the module directly — no Linux userspace | +48 ms over the container floor ([018](experiments/018_wasm_platforms/)) | [014](experiments/014_wasm_webserver/), [018](experiments/018_wasm_platforms/) |
 
 **(b) is the trap.** Measured in [003](experiments/003_wasm_compile/): the same module cold-starts
 in 177 ms under `spin up` natively and 1,238 ms wrapped in podman. The container tax of
-**+1,061 ms is six times larger than the WASM runtime's entire startup**, and worse than the
-plain Flask-in-Docker baseline it was supposed to beat. Putting WASM in a container discards
+**+1,061 ms is six times larger than the WASM runtime's entire startup**, and 23x the
+~54 ms that [001](experiments/001_hello_world/) leg 1 measured for the plain
+Flask-in-a-container baseline it was supposed to beat. Putting WASM in a container discards
 most of what WASM bought you. It only makes sense when you need OCI/Kubernetes orchestration
 badly enough to pay for it.
 
@@ -143,24 +144,42 @@ performance result. A benchmark's numbers are meant to be argued with.
 - Fastest cold start: host pre-warms the listener
 - Example: [014](experiments/014_wasm_webserver/) — Spin vs raw TCP
 
-Measured cold starts, worst to best. See [Two use cases](#two-use-cases-constantly-conflated)
-for why rows 1-2 and rows 3-6 answer different questions:
+Measured cold starts. Every row cites the leg it came from; where a figure was
+never measured, it says so rather than carrying an estimate.
 
-| Architecture | Cold Start | Memory | Source | When to use |
-|--------------|------------|--------|--------|-------------|
-| Browser, client-side | 0 (cached) | ~20MB | [010](experiments/010_mastermind_web/) | Interactive UI, offline-capable |
-| Headless browser, server-side | ~620ms | ~375MB | [002](experiments/002_chromium_sandbox/) leg 5a | Essentially never — Chromium's floor dominates |
-| Spin runtime in a container | **1,238ms** | ~424MB | [003](experiments/003_wasm_compile/) leg 1b | Only if you need OCI/k8s orchestration |
-| Container running a normal process | 500ms+ | 50MB+ | [001](experiments/001_hello_world/) leg 1 | Legacy, complex dependencies |
-| `spin up` native | 177ms | 16MB | [003](experiments/003_wasm_compile/) leg 1a | HTTP workloads without orchestration |
-| wasmtime embedded as a library | ~40ms | ~20MB | [009](experiments/009_rust_native_host/) | Latency-sensitive, single-tenant |
-| Serverless, host owns the socket | ~5ms | ~10MB | [014](experiments/014_wasm_webserver/) | HTTP workloads, multi-tenant |
+| Architecture | Cold start | Memory RSS | Source |
+|--------------|-----------|-----------|--------|
+| Pyodide in headless Chrome | 5,837 ms | 1,109 MB | [001](experiments/001_hello_world/) leg 2b |
+| Spin runtime **inside** a container | **1,238 ms** | ~424 MB | [003](experiments/003_wasm_compile/) leg 1b |
+| Headless Chromium + native WASM | ~620 ms | ~375 MB | [002](experiments/002_chromium_sandbox/) leg 5a |
+| `wasmtime` embedded, first run of a fresh binary | 190 ms | not measured | [009](experiments/009_rust_native_host/) |
+| `spin up` native | 177 ms | 16 MB | [003](experiments/003_wasm_compile/) leg 1a |
+| **Flask in a container** (image pre-built) | **~54 ms** | not measured | [001](experiments/001_hello_world/) leg 1 |
+| `wasmtime` standalone | ~43 ms | 20 MB | [001](experiments/001_hello_world/) leg 3 |
+| `wasmtime` embedded, warm | 4 ms | not measured | [009](experiments/009_rust_native_host/) |
+| Serverless, host owns the socket | **not measured** | not measured | [014](experiments/014_wasm_webserver/) has no cold-start benchmark |
 
-Two results here are worth staring at. **Containerising the WASM runtime (1,238ms) is slower
-than the plain container baseline it was meant to beat (500ms+)** — the WASM gains are entirely
-consumed by the container tax. And **a headless browser used as a server-side runtime (~620ms)
-is also slower than that baseline**, even after removing Pyodide and running native WASM.
-Both are cases of keeping a heavyweight host and swapping only what runs inside it.
+*Resolution caveat:* `cold_start_ms` polls at 100 ms intervals, so ~43 ms and
+~54 ms both mean "answered on the first poll". Treat them as one class and do not
+read an ordering between them.
+
+Three things in this table are uncomfortable for the premise this repo set out to
+test, and are stated rather than smoothed:
+
+**A plain Flask container cold-starts in ~54 ms — faster than `spin up` at 177 ms.**
+Experiment 001 hypothesised containers at "~500 ms+" (H2) and measured ~54 ms.
+For a pre-built image on a warm machine, container startup is not the bottleneck
+the WASM pitch assumes. The container tax is real when you *wrap a WASM runtime*
+in one (1,238 ms), not when you simply run a process in one.
+
+**Containerising a WASM runtime is 23x worse than the container it replaces** —
+1,238 ms against ~54 ms. That is the strongest single number here, and it is an
+argument against architecture (b), not against containers.
+
+**The serverless row is empty.** 014 compares guest-owned versus host-owned
+sockets by artifact size and design, and never benchmarks cold start. The
+"~5 ms serverless" figure that previously sat here was inherited from an early
+draft, was never measured anywhere in this repo, and has been removed.
 
 ### 2. WASM Targets
 
