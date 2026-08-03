@@ -25,7 +25,7 @@ RESULTS=()   # "outcome|leg|detail"
 # Only BROKEN means something is wrong with this experiment.
 record() { RESULTS+=("$1|$2|$3"); printf '   %-8s %s\n' "$1" "$2"; }
 
-echo "=== Portability: one wasi-http component, six legs ==="
+echo "=== Portability: one wasi-http component, seven legs ==="
 echo ""
 if ! wash build >/tmp/wasm018-build.log 2>&1; then
     echo "BROKEN: component build failed — see /tmp/wasm018-build.log"; exit 1
@@ -62,7 +62,7 @@ start_bg() { "$@" & BG_PID=$!; disown "$BG_PID" 2>/dev/null || true; }
 stop_bg() { [ -n "${BG_PID:-}" ] && kill "$BG_PID" 2>/dev/null; BG_PID=""; return 0; }
 
 # 1. wasmtime serve — the raw component-model runtime, no platform wrapper.
-echo "--- 1/6 wasmtime serve (no wrapper at all) ---"
+echo "--- 1/7 wasmtime serve (no wrapper at all) ---"
 start_bg timeout 5 wasmtime serve -S cli "$WASM" --addr 127.0.0.1:19001 &>/tmp/wasm018-wasmtime.log
 sleep 2
 if curl -sS -f http://127.0.0.1:19001/ &>/tmp/wasm018-wasmtime-curl.log; then
@@ -74,7 +74,7 @@ pkill -f "wasmtime serve" 2>/dev/null || true
 sleep 1
 
 # 2. Spin — same .wasm, wrapped only in a spin.toml manifest (no rebuild).
-echo "--- 2/6 Spin (spin.toml wraps the SAME .wasm, zero rebuild) ---"
+echo "--- 2/7 Spin (spin.toml wraps the SAME .wasm, zero rebuild) ---"
 mkdir -p /tmp/wasm018-spin-wrap
 cp "$WASM" /tmp/wasm018-spin-wrap/hello_world.wasm
 cat > /tmp/wasm018-spin-wrap/spin.toml <<'EOF'
@@ -100,7 +100,7 @@ pkill -f "spin up" 2>/dev/null || true
 sleep 1
 
 # 3. wasmCloud (wash dev) — the component's native home.
-echo "--- 3/6 wash dev (wasmCloud's local host) ---"
+echo "--- 3/7 wash dev (wasmCloud's local host) ---"
 start_bg timeout 12 wash dev --non-interactive &>/tmp/wasm018-wash.log
 sleep 8
 if curl -sS -f http://127.0.0.1:8000/ &>/tmp/wasm018-wash-curl.log; then
@@ -113,7 +113,7 @@ sleep 1
 
 # 4. Fastly Compute (Viceroy) — expected to fail: component support is
 #    explicitly experimental in Viceroy as of this writing.
-echo "--- 4/6 Fastly Compute / Viceroy ---"
+echo "--- 4/7 Fastly Compute / Viceroy ---"
 mkdir -p /tmp/wasm018-fastly-wrap/bin
 cp "$WASM" /tmp/wasm018-fastly-wrap/bin/main.wasm
 cat > /tmp/wasm018-fastly-wrap/fastly.toml <<'EOF'
@@ -138,7 +138,7 @@ sleep 1
 
 # 5. Cloudflare Workers (wrangler/workerd) — expected to fail: workerd (V8)
 #    only implements core Wasm modules, not the Component Model binary format.
-echo "--- 5/6 Cloudflare Workers / workerd (unmodified component) ---"
+echo "--- 5/7 Cloudflare Workers / workerd (unmodified component) ---"
 mkdir -p /tmp/wasm018-cf-worker
 cp "$WASM" /tmp/wasm018-cf-worker/component.wasm
 cat > /tmp/wasm018-cf-worker/wrangler.toml <<'EOF'
@@ -167,7 +167,7 @@ stop_bg
 #    component cannot be loaded as-is; this proves what it takes to load it
 #    anyway — a core-module transpile plus a hand-written wasi:http/wasi:io host.
 #    Note: cwd is portability/hello (set at the top), so paths are relative to it.
-echo "--- 6/6 Cloudflare Workers / workerd (jco-transpiled) ---"
+echo "--- 6/7 Cloudflare Workers / workerd (jco-transpiled) ---"
 COMPONENT_ABS="$(pwd)/$WASM"
 CFW="$(cd ../cf-worker && pwd)"
 if ! command -v jco &>/dev/null; then
@@ -193,6 +193,29 @@ else
     fi
 fi
 
+# 7. Fastly via its OWN SDK. Not a portability leg — different bytes, different
+#    interface. It answers the question leg 4 provokes: does Fastly run WASM at
+#    all? Yes, natively. The gap is the ABI, not the platform.
+echo "--- 7/7 Fastly Compute / native SDK (different bytes, for contrast) ---"
+FSDK="$(cd ../fastly-sdk 2>/dev/null && pwd)"
+if [ -z "$FSDK" ]; then
+    record SKIP "Fastly (native SDK)" "portability/fastly-sdk missing"
+else
+    ( cd "$FSDK" && timeout 100 fastly compute build ) >/tmp/wasm018-fsdk-build.log 2>&1
+    if [ ! -f "$FSDK/pkg/fastly-sdk-demo.tar.gz" ]; then
+        record BROKEN "Fastly (native SDK)" "build failed: $(diagnose /tmp/wasm018-fsdk-build.log)"
+    else
+        ( cd "$FSDK" && start_bg timeout 40 fastly compute serve --skip-build --addr 127.0.0.1:19006 &>/tmp/wasm018-fsdk.log )
+        sleep 11
+        if curl -sS -f -m 10 http://127.0.0.1:19006/ &>/tmp/wasm018-fsdk-curl.log; then
+            record SDK "Fastly (native SDK)" "runs via fastly:compute/* — NOT the same bytes; $(grep -oE 'completed in [0-9.]+[mµ]s' /tmp/wasm018-fsdk.log | head -1)"
+        else
+            record BROKEN "Fastly (native SDK)" "$(diagnose /tmp/wasm018-fsdk.log)"
+        fi
+        stop_bg
+    fi
+fi
+
 echo ""
 echo "=== Result ==="
 echo ""
@@ -205,12 +228,12 @@ for r in "${RESULTS[@]}"; do
     printf '  %-5s %-22s %-9s %s\n' "$i/${#RESULTS[@]}" "$leg" "$outcome" "$detail"
 done
 
-runs=0; adapted=0; blocked=0; broken=0; skipped=0
+runs=0; adapted=0; blocked=0; broken=0; skipped=0; sdk=0
 for r in "${RESULTS[@]}"; do
     case "${r%%|*}" in
         RUNS) runs=$((runs+1));; ADAPTED) adapted=$((adapted+1));;
         BLOCKED) blocked=$((blocked+1));; BROKEN) broken=$((broken+1));;
-        SKIP) skipped=$((skipped+1));;
+        SKIP) skipped=$((skipped+1));; SDK) sdk=$((sdk+1));;
     esac
 done
 
@@ -226,6 +249,7 @@ if [ "$blocked" -gt 0 ]; then
         rest="${r#*|}"; printf "      %-22s %s\n" "${rest%%|*}" "${rest#*|}"
     done
 fi
+[ "$sdk" -gt 0 ] && echo "  $sdk runs only via the platform's own SDK — different bytes, so not portability at all."
 [ "$skipped" -gt 0 ] && echo "  $skipped skipped (tool not installed)."
 echo ""
 if [ "$broken" -gt 0 ]; then

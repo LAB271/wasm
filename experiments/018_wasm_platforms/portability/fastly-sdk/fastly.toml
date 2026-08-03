@@ -1,0 +1,6 @@
+authors = ["lab271"]
+description = "Fastly SDK demo: the platform-native ABI, for contrast with the portable component"
+language = "rust"
+manifest_version = 3
+name = "fastly-sdk-demo"
+service_id = ""

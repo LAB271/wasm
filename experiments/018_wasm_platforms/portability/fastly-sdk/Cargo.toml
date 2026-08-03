@@ -1,0 +1,11 @@
+[package]
+name = "fastly-sdk-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fastly = "0.11"
+
+[profile.release]
+opt-level = "z"
+lto = true
