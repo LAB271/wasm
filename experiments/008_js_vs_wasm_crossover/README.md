@@ -116,6 +116,38 @@ artifact, not a property of `-Oz` vs `-O3`. At this size, instantiate cost is no
 signal; it only starts to matter for modules orders of magnitude larger (see 010's
 loading-strategy numbers).
 
+## Re-validation under process isolation (issue #52)
+
+The numbers above come from an in-process harness. [Issue #52](https://github.com/Lab271/wasm/issues/52)
+established that such a harness makes whichever variant runs **first** ~1.3x faster
+regardless of what it is. `rematch_isolated.sh` re-measures with each variant in its
+own `node` process, so there is no "first" for the bias to favour:
+
+| Variant | in-process | **isolated process** |
+|---------|-----------:|---------------------:|
+| **js bit-packed nibbles** | 17.38 ms | **10.55 ms** |
+| WASM `-O3` | 24.16 ms | 14.74 ms |
+| WASM `-Oz` | 15.21 ms | 14.77 ms |
+| js tuned switch (010's figure) | 42.30 ms | 37.91 ms |
+| js typed-array scratch | 41.70 ms | 45.66 ms |
+| js naive | 51.53 ms | 57.63 ms |
+
+**The conclusion inverts.** In-process, WASM led bit-packed JS 1.14x. Isolated,
+**bit-packed JS is 1.39x faster than the best WASM build** (10.55 vs 14.74 ms,
+ratio 0.72x). JS was measured *after* WASM in the sequential harness, so the
+ordering penalty fell on JS and hid a JS win — the opposite of the direction #52
+guessed was "probably safe".
+
+Two things this also settles:
+
+- **`-Oz` and `-O3` are equivalent**, 14.77 vs 14.74 ms, 0.2% apart. The
+  retracted 1.55–1.63x "`-Oz` beats `-O3`" was entirely the ordering artifact.
+- **The headline for this workload is now: well-written JavaScript beats WASM.**
+  Not parity — a 1.4x JS win, for ~3x fewer bytes shipped.
+
+Reproduce: `REPS=3 ./rematch_isolated.sh`. Variants are selected with
+`node js/bench_010_rematch.mjs --only "<variant>"`, which measures one and exits.
+
 ## Axis 1 — what crosses the boundary
 
 Same rung-by-rung structure as the brief, decomposed into **marshal** (getting JS-native

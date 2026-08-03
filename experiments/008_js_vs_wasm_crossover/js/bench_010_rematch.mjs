@@ -112,6 +112,16 @@ const JS_IMPLS = {
   "js typed-array scratch": jsTypedScratch,
 };
 
+// `--only <name>` measures exactly ONE variant and exits, so a driver can give
+// each variant its own fresh process. Issue #52: measuring variants
+// sequentially in one process made whichever ran first ~1.3x faster, which
+// invalidated a published -Oz-vs-O3 finding. One variant per process has no
+// "first" to be biased toward.
+const ONLY = (() => {
+  const i = process.argv.indexOf("--only");
+  return i === -1 ? null : process.argv[i + 1];
+})();
+
 async function main() {
   const oz = await loadWasm(OZ);
   const o3 = await loadWasm(O3);
@@ -120,8 +130,8 @@ async function main() {
   const wasmScore = o3.instance.exports.score_guess;
 
   // ─── Parity: every JS formulation must match WASM on every pair ─────────
-  console.log(`parity check (${codes.length} x ${codes.length} = ${(codes.length * codes.length).toLocaleString()} pairs)...`);
-  for (const [name, fn] of Object.entries(JS_IMPLS)) {
+  if (!ONLY) console.log(`parity check (${codes.length} x ${codes.length} = ${(codes.length * codes.length).toLocaleString()} pairs)...`);
+  for (const [name, fn] of Object.entries(ONLY ? {} : JS_IMPLS)) {
     for (const g of codes) {
       for (const s of codes) {
         const w = wasmScore(s[0], s[1], s[2], s[3], g[0], g[1], g[2], g[3]);
@@ -133,7 +143,7 @@ async function main() {
       }
     }
   }
-  console.log("  all formulations match WASM bit-for-bit\n");
+  if (!ONLY) console.log("  all formulations match WASM bit-for-bit\n");
 
   // ─── Timed runs: full 1296x1296 = 1,679,616 calls per round ────────────
   function fullSweep(fn) {
@@ -142,10 +152,25 @@ async function main() {
     return acc;
   }
 
+  const ALL = {
+    "WASM -Oz": oz.instance.exports.score_guess,
+    "WASM -O3": wasmScore,
+    ...JS_IMPLS,
+  };
+
+  if (ONLY) {
+    if (!(ONLY in ALL)) {
+      console.error(`unknown variant: ${ONLY}\nknown: ${Object.keys(ALL).join(" | ")}`);
+      process.exit(2);
+    }
+    const st = timeRounds(() => fullSweep(ALL[ONLY]));
+    // machine-readable, one variant, one process
+    console.log(`RESULT|${ONLY}|${st.med.toFixed(4)}|${st.min.toFixed(4)}|${st.max.toFixed(4)}`);
+    return;
+  }
+
   const results = {};
-  results["WASM -Oz"] = timeRounds(() => fullSweep(oz.instance.exports.score_guess));
-  results["WASM -O3"] = timeRounds(() => fullSweep(wasmScore));
-  for (const [name, fn] of Object.entries(JS_IMPLS)) {
+  for (const [name, fn] of Object.entries(ALL)) {
     results[name] = timeRounds(() => fullSweep(fn));
   }
 

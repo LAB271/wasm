@@ -381,14 +381,16 @@ feedback for TurboFan to commit. The bit-packed version has **zero** branches to
 mis-speculate and **zero** deopt events. It isn't executing fewer instructions so much as
 never falling out of optimized code.
 
-**How close is it really?** Close enough that the direction depends on the harness. The
-direct rematch above puts WASM 1.14x ahead; 008's granularity sweep, calling one pair at
-a time through its batch entry point, puts bit-packed JS **1.3–1.5x ahead**. Per-element
-compute is ~5.5–6.2 ns for WASM against ~5.9–7.8 ns for JS. The honest reading is
-**parity**, not a win for either — and every measurement agrees the 1.68x is gone.
+**How close is it really? JS wins.** The 1.14x above came from an in-process
+harness, and [issue #52](https://github.com/Lab271/wasm/issues/52) showed such a
+harness favours whichever variant runs first by ~1.3x. Re-measured with each
+variant in its own process ([008](../008_js_vs_wasm_crossover/),
+`rematch_isolated.sh`), bit-packed JS runs the same 1.68M calls in **10.55 ms
+against WASM's 14.74 ms — JS is 1.39x faster.** JS was measured *after* WASM, so
+the ordering penalty fell on JS and concealed a JS win.
 
-So the verdict is narrower than first written: **~3x the bytes for roughly break-even
-speed.** For manual play — ten calls per game — the WASM is pure overhead. For the
+So the verdict is worse for WASM than either earlier figure: **~3x the bytes to be
+1.4x slower.** For manual play — ten calls per game — the WASM is pure overhead. For the
 solver, it is not a reason to ship a second toolchain.
 
 **What would actually make WASM win here is batching, not language choice.** 008 found
