@@ -26,7 +26,12 @@ run: ## Run one leg standalone (vars: LEG=leg1_flask_docker|leg2a_pyodide_node|l
 
 # === Test ===
 
-test: ## Run unit tests (bats)
+# Division of labour: experiments/shared/tests/ tests the library functions
+# themselves; these test how 001 *applies* them — that its legs, ports and
+# library calls actually agree with each other. The bench.sh-internals tests
+# that used to live here were duplicates, and they drifted (31s here vs 2.5s
+# in shared, because only shared got optimised).
+test: ## Run 001's wiring tests (bats)
 	bats tests/
 
 bench: ## Run full benchmark
