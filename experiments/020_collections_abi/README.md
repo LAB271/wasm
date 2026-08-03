@@ -10,19 +10,31 @@ a number is derived rather than measured, it says so.
 
 WebAssembly core has `i32`, `i64`, `f32`, `f64`, plus `v128` (SIMD) and `funcref`/`externref`.
 
-> **Scope, and a Wasm 3.0 caveat.** That list describes the core value types the
-> toolchains measured here actually emit. **Wasm 3.0 (completed 2025-09-17) adds
-> WasmGC — real `struct` and `array` heap types** — so "WebAssembly has no
-> aggregates" is no longer true of the *specification*. It remains true of this
-> experiment, because neither Rust (`wasm32-*`, linear memory) nor
-> AssemblyScript (linear memory plus its own GC) targets WasmGC: both compile
-> collections down to bytes in linear memory, which is why the conventions below
-> are what you actually deal with today.
+> **Scope, and a Wasm 3.0 caveat.** That list describes the core value types, and
+> **Wasm 3.0 (completed 2025-09-17) adds WasmGC — real `struct` and `array` heap
+> types** — so "WebAssembly has no aggregates" is no longer true of the
+> *specification*.
 >
-> Languages that *do* target WasmGC — Kotlin/Wasm, Dart, Java via J2CL, OCaml,
-> Scheme — would need a separate experiment. There the boundary question changes
-> shape entirely: aggregates become native types rather than conventions, and the
-> interesting cost moves from marshalling to GC interaction. Not measured here.
+> It is still true of every toolchain this repo targets, and not by a narrow
+> margin. Checked on this machine:
+>
+> | Language | wasm targets offered | How collections are actually stored |
+> |----------|---------------------|-------------------------------------|
+> | Rust | 6 (`wasm32-unknown-unknown`, `wasm32-wasip1/2`, …) — **none WasmGC** | linear memory, no runtime GC |
+> | Go | `js/wasm`, `wasip1/wasm` — **no WasmGC** | its own GC compiled into the module |
+> | AssemblyScript | — | **TLSF allocator + its own incremental GC**, in linear memory |
+> | Python | via Pyodide / componentize-py | CPython's own refcounting, in linear memory |
+>
+> Every one of them flattens collections into bytes in linear memory. So the six
+> conventions below are not a legacy artifact — they are what you deal with in
+> Rust, Go, Python and AssemblyScript today, and there is no WasmGC target to
+> switch to in any of them.
+>
+> WasmGC is being taken up by a different set of languages — Kotlin/Wasm, Dart,
+> Java via J2CL, OCaml, Scheme — where aggregates become native types and the
+> interesting cost moves from marshalling to GC interaction. That is a real
+> experiment, but it needs a toolchain none of the above provides, so it is out of
+> scope here rather than merely unmeasured.
 That is the entire type system a function signature can use.
 
 What it has **no concept of** is aggregates. There is no string. No list. No map. No set.
