@@ -26,6 +26,24 @@ browser versus specific to the Pyodide runtime itself.
 | H6 | For I/O-bound work, isolation overhead is negligible relative to DB round-trip | **Rejected** — fresh context overhead (~980ms) dwarfs DB round-trip (~1ms) |
 | H7 | Native WASM (Rust/AssemblyScript) in V8 eliminates Pyodide's interpreter/CDN-load overhead, achieving cold start <100ms and memory <100MB for identical CPU-bound work | **Partially confirmed** — cold start drops ~2.9x (1790→622/615ms) and memory drops ~1.6x (602→375/374MB) vs Pyodide, but stays well above the <100ms/<100MB targets: headless Chromium itself has a ~600ms/~240MB floor that no WASM runtime choice avoids |
 
+### What the isolation overhead actually buys
+
+H3 and H5 price per-request `BrowserContext` isolation at **~950 ms and ~340 MB**.
+They do not say what that price buys, which left the security half of the original
+question open.
+
+Measured since: each `BrowserContext` gets **its own renderer process**, one per
+context, linearly, even for the same origin (four same-origin contexts → four
+added renderers). So it is an **OS process boundary plus Chrome's renderer
+sandbox**, not merely the separate cookie jar and `localStorage` the docs
+emphasise — which is also why H5 came in at ~340 MB per context against a
+predicted ~50 MB: each one is a whole renderer process.
+
+That makes the guarantee real, and stronger than WASI's on containment — but
+weaker on capability posture, because the web platform is ambient and large,
+whereas WASI grants nothing unless asked. Full comparison, with the cost figures
+alongside: [ADR-0009](../../.openspec/adr/0009-isolation-models-browser-context-vs-wasi-capabilities.md).
+
 ## Legs
 
 | Leg | Port | Workload | Runtime | Isolation | Concurrency | Tests |
