@@ -327,8 +327,13 @@ pub extern "C" fn _start() {
     db.load_csv(&csv);
     eprintln!("Loaded {} records into SQLite", db.count());
 
-    let addr = "0.0.0.0:8080";
-    let listener = match TcpListener::bind(addr) {
+    // Port is configurable so tests can pick a free one. 8080 collides with
+    // podman's gvproxy forwarder on a machine running `podman compose`, and this
+    // repo already treats port pre-flighting as a first-class concern
+    // (`require_port_free` in shared/lib/bench.sh).
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let addr = format!("0.0.0.0:{port}");
+    let listener = match TcpListener::bind(&addr) {
         Ok(l) => l,
         Err(e) => {
             eprintln!("Failed to bind {}: {}", addr, e);

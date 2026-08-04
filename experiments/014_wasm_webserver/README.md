@@ -128,6 +128,55 @@ API:
 Note: In Leg B (serverless), writes don't persist between requests unless
 you use Spin's key-value store or an external database.
 
+## Concurrency model — the sharpest difference between the legs
+
+Socket ownership decides who can serve two clients at once, and the two legs land
+on opposite answers. Measured by `tests/concurrency_probe.py`, which is
+client-side only — it holds one connection open without sending anything, then
+asks whether a second client gets served:
+
+| Leg | Socket owner | Verdict | Evidence |
+|-----|-------------|---------|----------|
+| **A** — raw TCP in the guest | the **guest** | **SEQUENTIAL** | second client got nothing for 2s while the first was held, then answered in **1ms** the instant it was released |
+| **B** — Spin | the **host** | **CONCURRENT** | second client answered in **2ms** while the first was still held open |
+
+That 1ms is the point: the request was parsed and ready the whole time, just
+unserved. Leg A had accepted the first connection, blocked in `read()` waiting
+for bytes that never came, and never reached `accept()` again.
+
+**Leg A cannot do better, and that is the finding.** Its loop is:
+
+```rust
+for stream in listener.incoming() {
+    Ok(s) => handle_connection(&db, s),
+}
+```
+
+No `spawn`, no `thread::`, no `async` — and not by omission. A `wasm32-wasip1`
+guest has no way to spawn: there is no threads support in the target, so
+head-of-line blocking is structural. One slow or stalled client blocks every
+other client.
+
+**Leg B cannot express concurrency at all**, and gets it anyway. The guest is
+`fn handle_request(req) -> Response` — one request in, one response out, no
+loop to serialise. Spin runs overlapping requests against it.
+
+So the trade is not "raw sockets are lower-level therefore faster". It is:
+
+> **Concurrency is a host property you rent, not a guest property you write.**
+
+Owning the socket buys protocol control ([ADR-0008](../../.openspec/adr/0008-archetype-guest-owned-sockets.md))
+and costs you concurrency entirely. Renting it ([ADR-0004](../../.openspec/adr/0004-archetype-prebuilt-server-http-blackbox.md))
+costs you protocol control and gives concurrency for free.
+
+**Not measured here:** `wasm32-wasip1-threads` (wasi-threads) would in principle
+let a guest spawn and change leg A's answer. Nothing in this repo exercises it,
+so whether a guest-owned socket can be made concurrent is open — the finding
+above is about *these* targets, not about WASM in general.
+
+Reproduce: `make test-concurrency`, or `python3 tests/concurrency_probe.py <port>`
+against any HTTP server.
+
 ## Results
 
 _Pending benchmarks._

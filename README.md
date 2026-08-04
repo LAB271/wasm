@@ -159,6 +159,25 @@ never measured, it says so rather than carrying an estimate.
 | `wasmtime` embedded, warm | 4 ms | not measured | [009](experiments/009_rust_native_host/) |
 | Serverless, host owns the socket | **not measured** | not measured | [014](experiments/014_wasm_webserver/) has no cold-start benchmark |
 
+**Concurrency model, measured** ([014](experiments/014_wasm_webserver/) `make test-concurrency`).
+Cold start and memory are the usual axes; who can serve two clients at once is
+arguably more consequential and splits the same two legs cleanly:
+
+| Socket owner | Concurrency | Why |
+|---|---|---|
+| **Guest** (raw TCP, `wasm32-wasip1`) | **sequential** | no `spawn` available in the target, so `for stream in incoming()` head-of-line blocks — a stalled client blocks all others |
+| **Host** (Spin, Workers, wasmtime embed) | **concurrent** | the guest is a request handler and cannot express concurrency; the host runs overlapping instances |
+
+**Concurrency is a host property you rent, not a guest property you write.**
+Browser-side the unit is the Web Worker — [002](experiments/002_chromium_sandbox/)
+measured **3.2x throughput** on a 5-worker pool, with real shared memory available
+via `SharedArrayBuffer` + `Atomics` but gated behind COOP/COEP headers
+([006](experiments/006_worker_kill_switch/)), where `Worker.terminate()` also
+takes **~2.14s** to stop a tight WASM loop.
+
+`wasm32-wasip1-threads` is not exercised anywhere in this repo, so "can a
+guest-owned socket be concurrent?" is open rather than answered.
+
 *Resolution caveat:* `cold_start_ms` polls at 100 ms intervals, so ~43 ms and
 ~54 ms both mean "answered on the first poll". Treat them as one class and do not
 read an ordering between them.

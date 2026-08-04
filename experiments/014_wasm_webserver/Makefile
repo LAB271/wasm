@@ -100,8 +100,12 @@ leg-b: build-b ## Run Leg B: serverless handler via Spin
 
 # === Test ===
 
-test: test-a test-b ## Test both legs return identical JSON
+test: test-a test-b test-concurrency ## Test both legs: identical JSON + concurrency model
 	@echo "Both legs verified."
+
+test-concurrency: build-a ## Assert leg A is sequential and leg B is concurrent (bats)
+	@command -v bats >/dev/null 2>&1 || { echo "bats not found — brew install bats-core"; exit 1; }
+	bats tests/test_concurrency.bats
 
 test-a: build-a ## Test Leg A (CRUD)
 	@echo "Testing Leg A (TCP)..."
